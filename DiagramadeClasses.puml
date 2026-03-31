@@ -1,0 +1,63 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+class Vaga {
+  - idVaga: Integer
+  - tipoVaga: String
+  - statusDisponibilidade: String
+  + atualizarStatus()
+  + verificarDisponibilidade()
+}
+
+class Navio {
+  - imoID: String
+  - nome: String
+  - comandante: String
+  + registrarChegada()
+}
+
+class Carga {
+  - idCarga: Integer
+  - descricao: String
+  - quantidadeToneladas: Double
+  - ehPerecivel: Boolean
+  - statusAlfandega: String
+  + solicitarLiberacaoAduaneira()
+}
+
+class FilaAtracacao {
+  - idFila: Integer
+  - dataHoraEntrada: DateTime
+  - nivelPrioridade: Integer
+  + calcularPrioridade()
+  + chamarProximoNavio()
+}
+
+class Atracacao {
+  - dataHoraInicio: DateTime
+  - dataHoraFim: DateTime
+  + calcularTempoTotal()
+  + finalizarAtracacao()
+}
+
+' Relacionamento de Composição
+Navio "1" *-- "1..*" Carga : transporta >
+
+' Relacionamento de Associação Simples
+Navio "1" -- "0..1" FilaAtracacao : aguarda em >
+
+' Classe Associativa
+Navio "0..*" -- "1" Vaga : ocupa >
+(Navio, Vaga) .. Atracacao
+
+note right of FilaAtracacao::calcularPrioridade
+  { Se Carga.ehPerecivel == true,
+    nivelPrioridade aumenta }
+end note
+
+note right of Carga::statusAlfandega
+  { Obrigatoriedade: statusAlfandega
+    deve ser "LIBERADO" para atracar }
+end note
+
+@enduml

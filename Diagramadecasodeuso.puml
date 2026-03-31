@@ -1,0 +1,51 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+' Definindo os Atores
+actor "Administrador do Porto" as Admin
+actor "Sistema da Alfândega" as Alfandega <<Sistema Externo>>
+
+' Delimitando a fronteira do sistema
+rectangle "App Admin - Porto do Itaqui" {
+  
+  usecase "Manter Cadastro de Navios" as UC_CadastroNavio
+  usecase "Registrar Operação de Carga" as UC_RegCarga
+  
+  usecase "Gerenciar Fila de Atracação" as UC_Fila
+  usecase "Aplicar Prioridade (Perecíveis)" as UC_Prioridade
+  
+  usecase "Registrar Atracação" as UC_Atracar
+  usecase "Registrar Saída (Desatracação)" as UC_Saida
+  
+  usecase "Monitorar Status das Vagas" as UC_Monitorar
+  usecase "Validar Liberação Aduaneira" as UC_ValidarAlfandega
+  usecase "Gerar Relatório de Tempos" as UC_Relatorio
+}
+
+' Relacionamentos do Administrador
+Admin --> UC_CadastroNavio
+Admin --> UC_RegCarga
+Admin --> UC_Fila
+Admin --> UC_Atracar
+Admin --> UC_Saida
+Admin --> UC_Monitorar
+Admin --> UC_Relatorio
+
+' Relacionamentos do Sistema Externo
+Alfandega --> UC_ValidarAlfandega
+
+' Regras de Negócio (Includes e Extends)
+' A operação de carga precisa que o navio esteja cadastrado (opcional dependendo da abordagem, mas boa prática)
+UC_RegCarga ..> UC_CadastroNavio : <<include>>
+
+' Prioridade estende a gestão da fila SE a carga for perecível
+UC_Fila <.. UC_Prioridade : <<extend>>
+
+' Para atracar ou iniciar operação, a alfândega é obrigatória
+UC_Atracar ..> UC_ValidarAlfandega : <<include>>
+
+' Registrar a saída inclui liberar a vaga que estava ocupada
+UC_Saida ..> UC_Monitorar : <<include>>
+
+@enduml
