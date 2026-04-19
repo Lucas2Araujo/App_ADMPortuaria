@@ -13,7 +13,10 @@ class Navio {
   - imoID: String
   - nome: String
   - comandante: String
-  + registrarChegada()
+  - statusValidacao: String
+  - dataSolicitacao: DateTime
+  + solicitarPreCadastro()
+  + validarDescarga()
 }
 
 class Carga {
@@ -22,6 +25,7 @@ class Carga {
   - quantidadeToneladas: Double
   - ehPerecivel: Boolean
   - statusAlfandega: String
+  - documentosAnexos: String
   + solicitarLiberacaoAduaneira()
 }
 
@@ -50,14 +54,13 @@ Navio "1" -- "0..1" FilaAtracacao : aguarda em >
 Navio "0..*" -- "1" Vaga : ocupa >
 (Navio, Vaga) .. Atracacao
 
+note left of Navio::statusValidacao
+  { Pendente, Validado, Rejeitado }
+end note
+
 note right of FilaAtracacao::calcularPrioridade
   { Se Carga.ehPerecivel == true,
     nivelPrioridade aumenta }
-end note
-
-note right of Carga::statusAlfandega
-  { Obrigatoriedade: statusAlfandega
-    deve ser "LIBERADO" para atracar }
 end note
 
 @enduml

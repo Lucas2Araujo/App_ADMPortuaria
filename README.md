@@ -3,10 +3,10 @@
 > **Disciplina:** Projeto e Desenvolvimento de Software (PDS)
 > **Professor::** Davi Viana dos Santos
 > **Instituição:** Universidade Federal do Maranhão (UFMA) - BICT / Engenharia da Computação
-> **Desenvolvedores:** Jennifer Caroline da Silva Barraza / Lohana de Vasconcelos Floriano / Lucas Araujo Dominici / Luis Fernando Ribeiro Curvelo / 
+> **Desenvolvedores:** Jennifer Caroline da Silva Barraza / Lohana de Vasconcelos Floriano / Lucas Araújo Dominici / Luis Fernando Ribeiro Curvelo / 
 
 ## Objetivo do Projeto
-Este projeto consiste no desenvolvimento de um sistema desktop/cliente-servidor para a gestão de embarque e desembarque de navios no **Porto em São Luis -MA**. O foco central do software é a automação da **fila de atracação**, aplicando algoritmos de prioridade baseados na natureza da carga transportada.
+Este projeto consiste no desenvolvimento de um sistema desktop/cliente-servidor para a gestão de embarque e desembarque de navios no **Porto em São Luis - MA**. O foco central do software é a automação da **fila de atracação**, aplicando algoritmos de prioridade baseados na natureza da carga transportada.
 
 A gestão da fila segue uma política estrita de perecibilidade:
 * **Cargas Comuns (Ex: Minério, Fertilizantes):** Inserção padrão no final da fila (FIFO - *First In, First Out*).
@@ -18,6 +18,8 @@ A gestão da fila segue uma política estrita de perecibilidade:
 - [x] **Motor de Fila:** Reordenação automática em tempo real baseada em prioridade.
 - [x] **Controle de Atracação:** Vínculo temporal entre Navio e Vaga (Timestamp de entrada e saída).
 - [x] **Monitoramento de Vagas:** Dashboard com o status atualizado dos berços do porto.
+- [x] **Portal da Tripulação:** Interface para que comandantes realizem o pré-cadastro de suas embarcações e manifestos de carga remotamente.
+- [x] **Workflow de Aprovação:** Camada de segurança onde o Administrador do Porto audita os dados recebidos antes de permitir a entrada na fila de atracação (Status: Pendente -> Validado).
 
 ## Arquitetura e Tecnologias
 O projeto é planejado para rodar nativamente em ambientes Linux e Windows, utilizando as seguintes tecnologias:
@@ -43,7 +45,7 @@ Os artefatos de engenharia de software da fase de Especificação e Projeto enco
 
 ```bash
 # 1. Clone este repositório
-git clone [https://github.com/Lucas2Araujo/App_PortoItaqui.git](https://github.com/lucas2araujo/sistema-itaqui-pds.git)
+git clone [https://github.com/Lucas2Araujo/App_ADMPortuaria](https://github.com/Lucas2Araujo/App_ADMPortuaria)
 
 # 2. Acesse o diretório do projeto
 cd App_PortoItaqui

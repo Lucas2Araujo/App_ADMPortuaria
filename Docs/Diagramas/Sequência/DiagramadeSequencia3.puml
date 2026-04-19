@@ -1,0 +1,31 @@
+@startuml
+title Diagrama de Sequência: Auto-Cadastro e Validação de Descarga
+hide footbox
+
+actor "Tripulação do Navio" as Crew
+participant "Portal de Auto-Serviço" as UI_Crew
+participant "Sistema/BD" as DB
+actor "Admin do Porto" as Admin
+participant "Painel Admin" as UI_Admin
+
+Crew -> UI_Crew: Preencher Dados (IMO, Carga, Docs)
+activate UI_Crew
+UI_Crew -> DB: salvarSolicitacao(status: PENDENTE)
+DB --> UI_Crew: Protocolo Gerado
+deactivate UI_Crew
+
+note over DB: O navio ainda NÃO aparece\nna fila de atracação oficial.
+
+Admin -> UI_Admin: Acessar "Solicitações Pendentes"
+activate UI_Admin
+UI_Admin -> DB: buscarSolicitacoes()
+DB --> UI_Admin: listaPendentes[]
+
+Admin -> UI_Admin: Analisar Dados e Validar
+UI_Admin -> DB: atualizarStatus(VALIDADO)
+deactivate UI_Admin
+
+note over DB: O sistema agora move o navio\npara a Fila de Atracação.
+
+DB -> DB: calcularPosicaoFila(prioridade)
+@enduml
