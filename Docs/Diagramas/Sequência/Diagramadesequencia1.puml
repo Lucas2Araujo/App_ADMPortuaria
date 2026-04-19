@@ -1,0 +1,37 @@
+@startuml
+title Diagrama de Sequência: Atracação Padrão (Carga Comum)
+hide footbox
+
+actor "Admin do Porto" as Admin
+participant "Interface/Sistema" as UI
+participant "Navio" as Navio
+participant "ControladorFila" as Ctrl
+participant "FilaAtracacao" as Fila
+participant "Vaga" as Vaga
+
+Admin -> UI: Registrar Chegada de Navio (IMO, Carga)
+activate UI
+
+UI -> Navio: criarNavio(IMO, nome, comandante)
+activate Navio
+Navio --> UI: navioInstanciado
+deactivate Navio
+
+UI -> Ctrl: adicionarNaFila(navio, carga)
+activate Ctrl
+
+Ctrl -> Fila: calcularPrioridade(carga)
+note right: carga.ehPerecivel == false\nprioridade = BAIXA
+
+Ctrl -> Fila: inserirNoFim(navio)
+Fila --> Ctrl: posicaoConfirmada
+
+Ctrl -> Vaga: verificarDisponibilidade()
+Vaga --> Ctrl: disponivel = true
+
+Ctrl -> UI: confirmarStatus(Aguardando Liberação)
+deactivate Ctrl
+
+UI --> Admin: Navio registrado na posição final da fila
+deactivate UI
+@enduml

@@ -1,0 +1,36 @@
+@startuml
+title Diagrama de Sequência: Atracação Prioritária (Carga Perecível)
+hide footbox
+
+actor "Admin do Porto" as Admin
+participant "Interface/Sistema" as UI
+participant "Carga" as Carga
+participant "Sistema Alfândega" as Alfandega <<Externo>>
+participant "ControladorFila" as Ctrl
+participant "FilaAtracacao" as Fila
+
+Admin -> UI: Registrar Chegada (Navio, Carga Perecível)
+activate UI
+
+UI -> Carga: setEhPerecivel(true)
+UI -> Alfandega: validarLiberacao(idCarga)
+activate Alfandega
+Alfandega --> UI: status: LIBERADO
+deactivate Alfandega
+
+UI -> Ctrl: processarEntrada(navio, carga)
+activate Ctrl
+
+Ctrl -> Fila: calcularPrioridade(carga)
+note right: carga.ehPerecivel == true\nprioridade = ALTA
+
+Ctrl -> Fila: reordenarFila(navio)
+note over Fila: Navio é movido para o\n topo da fila (pos[0])
+
+Fila --> Ctrl: filaAtualizada
+Ctrl --> UI: sucessoPrioridade
+deactivate Ctrl
+
+UI --> Admin: Alerta: Navio prioritário no topo da fila!
+deactivate UI
+@enduml
