@@ -1,26 +1,26 @@
-# ⚓ Sistema de Administração Portuária - Porto do Itaqui
+# Sistema de Administração Portuária
 
 > **Disciplina:** Projeto e Desenvolvimento de Software (PDS)
 > **Professor::** Davi Viana dos Santos
 > **Instituição:** Universidade Federal do Maranhão (UFMA) - BICT / Engenharia da Computação
+> **Desenvolvedores:** Jennifer Caroline da Silva Barraza / Lohana de Vasconcelos Floriano / Lucas Araujo Dominici / Luis Fernando Ribeiro Curvelo / 
 
-## 📖 Sobre o Projeto
-Este projeto consiste no desenvolvimento de um sistema desktop/cliente-servidor para a gestão de embarque e desembarque de navios no **Porto do Itaqui (São Luís - MA)**. O foco central do software é a automação da **fila de atracação**, aplicando algoritmos de prioridade baseados na natureza da carga transportada.
+## Objetivo do Projeto
+Este projeto consiste no desenvolvimento de um sistema desktop/cliente-servidor para a gestão de embarque e desembarque de navios no **Porto em São Luis -MA**. O foco central do software é a automação da **fila de atracação**, aplicando algoritmos de prioridade baseados na natureza da carga transportada.
 
-### 🎯 Regra de Negócio Principal
 A gestão da fila segue uma política estrita de perecibilidade:
 * **Cargas Comuns (Ex: Minério, Fertilizantes):** Inserção padrão no final da fila (FIFO - *First In, First Out*).
 * **Cargas Perecíveis (Ex: Alimentos):** Atribuição de prioridade máxima. O algoritmo reposiciona a embarcação no topo da fila de espera automaticamente após a liberação aduaneira.
 
-## 🚀 Funcionalidades (Requisitos Funcionais)
+## Funcionalidades (Requisitos Funcionais)
 - [x] **Cadastro de Navios:** Registro via IMO ID, Nome e Comandante.
 - [x] **Gestão de Cargas:** Lançamento de manifesto de carga com toggle de perecibilidade.
 - [x] **Motor de Fila:** Reordenação automática em tempo real baseada em prioridade.
 - [x] **Controle de Atracação:** Vínculo temporal entre Navio e Vaga (Timestamp de entrada e saída).
 - [x] **Monitoramento de Vagas:** Dashboard com o status atualizado dos berços do porto.
 
-## 🛠️ Arquitetura e Tecnologias
-O projeto foi planejado para rodar nativamente em ambientes Linux e Windows, utilizando as seguintes tecnologias:
+## Arquitetura e Tecnologias
+O projeto é planejado para rodar nativamente em ambientes Linux e Windows, utilizando as seguintes tecnologias:
 
 * **Linguagem:** Python 3.14 (Planejado)
 * **Banco de Dados:** PostgreSQL (Planejado)
@@ -28,7 +28,7 @@ O projeto foi planejado para rodar nativamente em ambientes Linux e Windows, uti
 * **Modelagem:** PlantUML / UML 2.0
 * **Prototipação UI:** Penpot / IA Generativa (Google Stitch, Ai Studio e Figma)
 
-## 📊 Documentação e Modelagem (Parte 1)
+## Documentação e Modelagem (Parte 1)
 Os artefatos de engenharia de software da fase de Especificação e Projeto encontram-se na pasta `/docs`:
 
 1.  **Modelo de Casos de Uso:** Visão geral das interações dos atores (Admin e Alfândega) com o sistema.
