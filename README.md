@@ -1,8 +1,7 @@
-Aplicativo feito para obtenção de nota na disciplina de Projeto e Desenvolvimento de Software (PDS) ministrada pelo professor Davi Viana no período 2026.1 na UFMA.
-
 # ⚓ Sistema de Administração Portuária - Porto do Itaqui
 
 > **Disciplina:** Projeto e Desenvolvimento de Software (PDS)
+> **Professor::** Davi Viana dos Santos
 > **Instituição:** Universidade Federal do Maranhão (UFMA) - BICT / Engenharia da Computação
 
 ## 📖 Sobre o Projeto
@@ -23,7 +22,7 @@ A gestão da fila segue uma política estrita de perecibilidade:
 ## 🛠️ Arquitetura e Tecnologias
 O projeto foi planejado para rodar nativamente em ambientes Linux e Windows, utilizando as seguintes tecnologias:
 
-* **Linguagem:** Python 3.x (Planejado)
+* **Linguagem:** Python 3.14 (Planejado)
 * **Banco de Dados:** PostgreSQL (Planejado)
 * **Interface Gráfica (GUI):** PyQt6 / CustomTkinter (Planejado)
 * **Modelagem:** PlantUML / UML 2.0
@@ -34,7 +33,8 @@ Os artefatos de engenharia de software da fase de Especificação e Projeto enco
 
 1.  **Modelo de Casos de Uso:** Visão geral das interações dos atores (Admin e Alfândega) com o sistema.
 2.  **Modelo de Domínio (Classes):** Abstração das regras de negócio (Navio, Carga, Fila, Vaga).
-3.  **Diagramas de Sequência:** * *Cenário A:* Atracação padrão (Carga comum).
+3.  **Diagramas de Sequência:** 
+    * *Cenário A:* Atracação padrão (Carga comum).
     * *Cenário B:* Atracação prioritária (Carga perecível interceptando a fila).
 4.  **Diagrama Entidade-Relacionamento (DER):** Esquema relacional para o PostgreSQL.
 5.  **Protótipos de Tela:** Wireframes descartáveis do Dashboard e Formulário de Registro.
