@@ -1,0 +1,27 @@
+@startuml
+title Diagrama de Estados: Ciclo de Vida do Navio
+
+[*] --> Pendente : Solicitar Pré-Cadastro (Tripulação)
+
+state Pendente {
+  [*] --> AguardandoValidacao
+  AguardandoValidacao --> Validado : Admin aprova dados
+  AguardandoValidacao --> Rejeitado : Admin identifica erro
+}
+
+Rejeitado --> [*]
+
+state Validado {
+  [*] --> AguardandoFila
+  AguardandoFila --> EmFila : Sistema calcula prioridade
+}
+
+EmFila --> Atracado : Vaga liberada e chamado para atracar
+Atracado --> Finalizado : Registro de saída (Desatracação)
+Finalizado --> [*]
+
+note right of EmFila
+  A posição na fila depende
+  da perecibilidade da carga.
+end note
+@enduml
