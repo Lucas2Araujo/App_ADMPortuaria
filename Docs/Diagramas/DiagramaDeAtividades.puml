@@ -1,34 +1,37 @@
 @startuml
-title Diagrama de Atividades: Registro e Classificação de Prioridade
+title Diagrama de Atividades: Gestão de Fluxo Portuário (v2)
 
+|Capitão do Navio|
 start
-:Receber dados do Navio e Manifesto de Carga;
-:Administrador audita a solicitação;
+:Solicitar Pré-Cadastro (Navio/Carga);
+note right: Inclui manifesto e\ndocumentos aduaneiros
 
-if (Dados são válidos? (RN03)) then (Não)
-  :Notificar Tripulação;
-  :Alterar status para Rejeitado;
+|Administrador do Porto|
+:Auditar Solicitação e Documentos;
+
+if (Dados Válidos e Liberados?) then (Não)
+  :Alterar Status para REJEITADO;
   stop
 else (Sim)
-  :Alterar status para Validado;
-  :Verificar natureza da carga (ehPerecivel);
+  :Alterar Status para VALIDADO;
   
-  if (A carga é perecível?) then (Sim)
-    :Aplicar Prioridade Máxima (RN04);
-    :Reposicionar navio no topo da fila (pos[0]);
+  if (Carga é Perecível? (RN01)) then (Sim)
+    :Aplicar Prioridade MÁXIMA;
+    :Reposicionar no Topo da Fila (pos[0]);
   else (Não)
-    :Aplicar Prioridade Baixa;
-    :Inserir navio no final da fila (FIFO);
-  endif
-  
-  :Atualizar Dashboard de Gestão de Atracação;
-  
-  if (Existe Vaga Disponível?) then (Sim)
-    :Autorizar Atracação Imediata;
-  else (Não)
-    :Aguardar na Fila de Atracação;
+    :Aplicar Prioridade BAIXA;
+    :Inserir no Final da Fila (FIFO);
   endif
 endif
+
+:Gerenciar Fila de Espera;
+
+while (Vaga Disponível? (RN02)) is (Não)
+  :Aguardar em Fila;
+endwhile (Sim)
+
+:Registrar Início da Atracação (Timestamp);
+:Registrar Saída/Desatracação;
 
 stop
 @enduml
