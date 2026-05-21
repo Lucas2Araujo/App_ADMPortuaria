@@ -5,15 +5,15 @@ skinparam state {
     RoundCorner 20
     BackgroundColor White
 }
-[*] --> Pendente : solicitarPreCadastro()
+[*] --> Em_Análise : solicitarPreCadastro()
 
-state Pendente
+state Em_Análise
 state Validado
 state Rejeitado
 
-Pendente --> Validado : validarDescarga(status=VALIDADO)
-Pendente --> Rejeitado : validarDescarga(status=REJEITADO)
-Rejeitado --> Pendente : solicitarPreCadastro()
+Em_Análise --> Validado : solicitarPreCadastro(status=VALIDADO)
+Em_Análise --> Rejeitado : solicitarPreCadastro(status=REJEITADO)
+Rejeitado --> Em_Análise : solicitarPreCadastro()
 
 state "Em Fila" as EmFila
 state Atracado
