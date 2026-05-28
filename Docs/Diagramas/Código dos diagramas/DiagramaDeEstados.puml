@@ -29,9 +29,9 @@ CadastroConcluido --> Cadastrado : EnviarCadastro()
 
 Cadastrado --> Fila : CalcularPrioridade()
 
-Fila --> Atracado : Atracar()
+Fila --> Atracado : chamarNavio()
 
-Atracado --> NavioLiberado : LiberarNavio()
+Atracado --> NavioLiberado : finalizarAtracacao()
 
 NavioLiberado --> [*]
 
