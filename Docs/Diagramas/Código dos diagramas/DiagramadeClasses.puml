@@ -21,7 +21,9 @@ class Navio {
   - status: StatusNavio
   - dataSolicitacao: DateTime
   + solicitarPreCadastro()
-  + validarDescarga(resultado: StatusNavio)
+  + solicitarDocumentação()
+  + EnviarCadastro()
+  
 }
 
 class Carga {
@@ -46,8 +48,8 @@ class FilaAtracacao {
   - dataHoraEntrada: DateTime
   - dataHoraSaida: DateTime
   - nivelPrioridade: Integer
-  + calcularPrioridade(carga: Carga)
-  + chamarProximoNavio(): Navio
+  + CalcularPrioridade(carga: Carga)
+  + chamarNavio(): Navio
 }
 
 class Atracacao {
