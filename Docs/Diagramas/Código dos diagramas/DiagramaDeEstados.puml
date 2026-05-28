@@ -1,28 +1,38 @@
 @startuml
-title Diagrama de Estados: Ciclo de Vida do Navio
+title Diagrama de Estados: Estados do Navio
 
 skinparam state {
     RoundCorner 20
     BackgroundColor White
-}
-[*] --> Em_Análise : solicitarPreCadastro()
+    }
 
-state Em_Análise
-state Validado
-state Rejeitado
+state Navio
+state "Pré-cadastrado" as PreCadastrado
+state "Aguardando documentação" as AguardandoDoc
+state "Cadastro concluído" as CadastroConcluido
+state "Navio liberado" as NavioLiberado
 
-Em_Análise --> Validado : solicitarPreCadastro(status=VALIDADO)
-Em_Análise --> Rejeitado : solicitarPreCadastro(status=REJEITADO)
-Rejeitado --> Em_Análise : solicitarPreCadastro()
+[*] --> Navio
 
-state "Em Fila" as EmFila
-state Atracado
-state Finalizado
+Navio --> PreCadastrado : Solicitar cadastro()
 
-Validado --> EmFila : calcularPrioridade()
-EmFila --> Atracado : chamarProximoNavio()
-Atracado --> Finalizado : finalizarAtracacao()
+PreCadastrado --> AguardandoDoc : Solicitar documentação()
 
-Finalizado --> [*]
+AguardandoDoc --> Aprovado : Documentação aprovada
+AguardandoDoc --> Reprovado : Documentação reprovada
+
+Reprovado --> [*]
+
+Aprovado --> CadastroConcluido
+
+CadastroConcluido --> Cadastrado : Enviar cadastro()
+
+Cadastrado --> Fila : Calcular prioridade()
+
+Fila --> Atracado : Atracar()
+
+Atracado --> NavioLiberado : Liberar navio()
+
+NavioLiberado --> [*]
 
 @enduml
