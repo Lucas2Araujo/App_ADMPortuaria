@@ -14,9 +14,9 @@ state "Navio liberado" as NavioLiberado
 
 [*] --> Navio
 
-Navio --> PreCadastrado : Solicitar cadastro()
+Navio --> PreCadastrado : SolicitarCadastro()
 
-PreCadastrado --> AguardandoDoc : Solicitar documentação()
+PreCadastrado --> AguardandoDoc : SolicitarDocumentação()
 
 AguardandoDoc --> Aprovado : Documentação aprovada
 AguardandoDoc --> Reprovado : Documentação reprovada
@@ -25,13 +25,13 @@ Reprovado --> [*]
 
 Aprovado --> CadastroConcluido
 
-CadastroConcluido --> Cadastrado : Enviar cadastro()
+CadastroConcluido --> Cadastrado : EnviarCadastro()
 
-Cadastrado --> Fila : Calcular prioridade()
+Cadastrado --> Fila : CalcularPrioridade()
 
 Fila --> Atracado : Atracar()
 
-Atracado --> NavioLiberado : Liberar navio()
+Atracado --> NavioLiberado : LiberarNavio()
 
 NavioLiberado --> [*]
 
