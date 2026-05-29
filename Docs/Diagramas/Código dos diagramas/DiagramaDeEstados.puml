@@ -18,8 +18,8 @@ Navio --> PreCadastrado : SolicitarCadastro()
 
 PreCadastrado --> AguardandoDoc : SolicitarDocumentação()
 
-AguardandoDoc --> Aprovado : Documentação aprovada
-AguardandoDoc --> Reprovado : Documentação reprovada
+AguardandoDoc --> Aprovado :  SolicitarDocumentação('aprovada')
+AguardandoDoc --> Reprovado : SolicitarDocumentação('reprovada')
 
 Reprovado --> [*]
 
