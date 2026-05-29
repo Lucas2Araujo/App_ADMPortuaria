@@ -1,7 +1,7 @@
 PESOS_CATEGORIA = {
-    "ULTRA_PERECIVEL": 10, # carnes, pscados, vacinas
+    "ULTRA_PERECIVEL": 10, # carnes, pescados, vacinas
     "ALTA_PERECIVEL": 7,   # frutas, laticínios
-    "BAIXA_PERECIVEL": 3,  #grãos úmidos, Açucar
+    "BAIXA_PERECIVEL": 3,  # grãos úmidos, Açucar
     "COMUM": 0             # minério, maquinário, fertilizantes (não perecível)
 }
 
