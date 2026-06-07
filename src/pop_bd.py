@@ -2,7 +2,7 @@ from faker import Faker
 import random
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from cad import Base, Navio, Carga
+from cad import Base, Navio, Carga, StatusNavio
 
 # Configuração do Banco de Dados
 ENGINE = create_engine("sqlite:///porto.db")
@@ -41,7 +41,8 @@ def gerar_navios_fake(quantidade=10):
                 imo_id = f"IMO{fake.unique.random_number(digits=7, fix_len=True)}",
                 nome = fake.first_name().upper() + " " + fake.last_name().upper(),
                 nome_capitao = fake.name(),
-                companhia = fake.company()
+                companhia = fake.company(),
+                status = random.choice([StatusNavio.PENDENTE, StatusNavio.VALIDADO])
             )
             
             num_cargas = random.randint(5, 10)
@@ -57,10 +58,13 @@ def gerar_navios_fake(quantidade=10):
                     toneladas = 40 - total_toneladas
                     
                 descricao = random.choice(produtos_disponiveis)
+                categoria = MAPA_CARGAS[descricao]
+                eh_perecivel = categoria in ['ULTRA_PERECIVEL', 'ALTA_PERECIVEL']
                 nova_carga = Carga(
                     descricao=descricao,
-                    categoria=MAPA_CARGAS[descricao],
-                    quantidade_toneladas=toneladas
+                    categoria=categoria,
+                    quantidade_toneladas=toneladas,
+                    eh_perecivel=eh_perecivel
                 )
                 novo_navio.cargas.append(nova_carga)
                 total_toneladas += toneladas
@@ -93,6 +97,25 @@ def verificar_integridade():
         else:
             print("Aviso: Nenhum dado encontrado no banco.")
 
+def gerar_vagas_iniciais(session, quantidade=5):
+    """Verifica se existem vagas. Se não, cria a quantidade especificada."""
+    if session.query(Vaga).count() == 0:
+        print(f"\nCriando {quantidade} vagas iniciais...")
+        tipos_vagas = ['Berço de Contêineres', 'Berço Graneleiro', 'Berço de Líquidos']
+        for _ in range(quantidade):
+            vaga = Vaga(
+                tipo_vaga=random.choice(tipos_vagas),
+                status=StatusVaga.LIVRE
+            )
+            session.add(vaga)
+        session.commit()
+        print("Vagas iniciais geradas com sucesso!")
+    else:
+        print("\nVagas já cadastradas no banco de dados.")
+
 if __name__ == "__main__":
+    with Session(ENGINE) as session:
+        gerar_vagas_iniciais(session)
+    
     gerar_navios_fake(10)
     verificar_integridade()
