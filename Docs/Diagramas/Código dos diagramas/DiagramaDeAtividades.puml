@@ -1,37 +1,41 @@
 @startuml
-title Diagrama de Atividades: Gestão de Fluxo Portuário (v2)
+title Diagrama de Atividades: Gestão de Fluxo Portuário (Refatorado para Sprint 1)
 
-|Capitão do Navio|
+|Tripulação do Navio|
 start
-:Solicitar Pré-Cadastro (Navio/Carga);
-note right: Inclui manifesto e\ndocumentos aduaneiros
+:Solicitar Pré-Cadastro (Navio e Cargas);
+note right: Informa a categoria da carga\ne submete documentos (dAlfandega)
 
 |Administrador do Porto|
-:Auditar Solicitação e Documentos;
+:Auditar Solicitações Pendentes;
 
-if (Dados Válidos e Liberados?) then (Não)
+if (Documentação Completa?) then (Não)
   :Alterar Status para REJEITADO;
   stop
 else (Sim)
   :Alterar Status para VALIDADO;
   
-  if (Carga é Perecível? (RN01)) then (Sim)
-    :Aplicar Prioridade MÁXIMA;
-    :Reposicionar no Topo da Fila (pos[0]);
+  :Calcular Score do Navio (Motor de Fila);
+  
+  if (Possui Carga Perecível?) then (Sim)
+    :Aplicar Multiplicador de Urgência (+10000);
   else (Não)
-    :Aplicar Prioridade BAIXA;
-    :Inserir no Final da Fila (FIFO);
+    :Aplicar Pontuação Base da Carga;
   endif
+  
+  :Adicionar Bónus de Tempo (Anti-Starvation);
+  :Atualizar Ordenação da Fila de Atracação;
+
+  while (Existe Vaga LIVRE?) is (Não)
+    :Aguardar na Fila;
+  endwhile (Sim)
+
+  :Atracar Navio (Status: ATRACADO);
+  :Registar Início da Operação na Vaga;
+
+  :Registar Desatracação (Status: FINALIZADO);
+  :Atualizar Vaga para LIVRE;
 endif
-
-:Gerenciar Fila de Espera;
-
-while (Vaga Disponível? (RN02)) is (Não)
-  :Aguardar em Fila;
-endwhile (Sim)
-
-:Registrar Início da Atracação (Timestamp);
-:Registrar Saída/Desatracação;
 
 stop
 @enduml
