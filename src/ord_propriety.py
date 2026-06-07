@@ -2,9 +2,9 @@ from datetime import datetime
 from cad import Navio, StatusNavio
 
 PESOS_CATEGORIA = {
-    "ULTRA_PERECIVEL": 10, # carnes, pescados, vacinas
-    "ALTA_PERECIVEL": 7,   # frutas, laticínios
-    "BAIXA_PERECIVEL": 3,  # grãos úmidos, Açucar
+    "URGENTE_PERECIVEL": 3, # carnes, pescados, vacinas
+    "ALTA_PERECIBILIDADE": 2,   # frutas, laticínios
+    "BAIXA_PERECIBILIDADE": 1,  # grãos úmidos, Açucar
     "COMUM": 0             # minério, maquinário, fertilizantes (não perecível)
 }
 
@@ -30,7 +30,7 @@ def calcular_score(navio: Navio) -> float:
     if navio.data_solicitacao:
         tempo_espera = datetime.now() - navio.data_solicitacao
         horas_espera = tempo_espera.total_seconds() / 3600.0
-        score_total += (horas_espera * 50)
+        score_total += (horas_espera * 500)
         
     return score_total
 
@@ -41,8 +41,7 @@ def obter_proximo_da_fila(session):
     if not navios_validados:
         return None
         
-    fila_ordenada = sorted(navios_validados, key=lambda n: calcular_score(n), reverse=True)
-    return fila_ordenada[0]
+    return max(navios_validados, key=calcular_score)
 
 def exibir_fila_atracacao(session):
     """
@@ -65,12 +64,10 @@ def exibir_fila_atracacao(session):
     
     # Imprime as linhas
     for pos, (navio, score) in enumerate(navios_com_score, start=1):
-        nome_exibicao = navio.nome if navio.nome else f"[Capitão] {navio.nome_capitao}"
-        
         if navio.data_solicitacao:
             espera = datetime.now() - navio.data_solicitacao
-            espera_str = str(espera).split('.')[0]  # Remove microsegundos para ficar limpo
+            espera_str = str(espera).split('.')[0]  
         else:
             espera_str = "N/A"
             
-        print(f"{pos:<4} | {navio.imo_id:<12} | {nome_exibicao:<30} | {navio.companhia[:25]:<25} | {score:<12.2f} | {espera_str}")
+        print(f"{pos:<4} | {navio.imo_id:<12} | {navio.nome:<30} | {navio.companhia[:25]:<25} | {score:<12.2f} | {espera_str}")

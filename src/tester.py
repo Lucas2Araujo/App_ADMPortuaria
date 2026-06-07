@@ -7,16 +7,16 @@ def executar_teste():
     navio1.adicionar_carga(Carga("Minério de Ferro", "COMUM", 5000))
     
     navio2 = Navio(imo_id="A-002", nome="Barco do Vini JR")
-    navio2.adicionar_carga(Carga("Carnes Congeladas", "ULTRA_PERECIVEL", 200))
+    navio2.adicionar_carga(Carga("Carnes Congeladas", "URGENTE_PERECIVEL", 200))
     navio2.adicionar_carga(Carga("Eletrônicos", "COMUM", 500))
 
     navio3 = Navio(imo_id="A-003", nome="Colheita do Tigrinho")
-    navio3.adicionar_carga(Carga("Soja Úmida", "BAIXA_PERECIVEL", 1000))
+    navio3.adicionar_carga(Carga("Soja Úmida", "BAIXA_PERECIBILIDADE", 1000))
     navio3.adicionar_carga(Carga("Fertilizantes", "COMUM", 2000))
 
     navio4 = Navio(imo_id="A-004", nome="Faz o L")
-    navio4.adicionar_carga(Carga("Frutas Frescas", "ALTA_PERECIVEL", 300))
-    navio4.adicionar_carga(Carga("Laticínios", "ALTA_PERECIVEL", 100))
+    navio4.adicionar_carga(Carga("Frutas Frescas", "ALTA_PERECIBILIDADE", 300))
+    navio4.adicionar_carga(Carga("Laticínios", "ALTA_PERECIBILIDADE", 100))
 
     fila_espera = [navio1, navio2, navio3, navio4]
 

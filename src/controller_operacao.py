@@ -84,6 +84,10 @@ def exibir_painel_vagas(session):
     print(f"Total: {total_vagas} | Disponíveis: {vagas_livres} | Ocupadas: {vagas_ocupadas}")
     print("=" * 70)
 
+    COR_VERDE = "\033[92m"
+    COR_VERMELHA = "\033[91m"
+    RESET = "\033[0m"
+
     for vaga in vagas:
         if vaga.status == StatusVaga.OCUPADA:
             atracacao = session.query(Atracacao).filter(
@@ -92,24 +96,61 @@ def exibir_painel_vagas(session):
             ).first()
             if atracacao:
                 navio = session.query(Navio).filter(Navio.imo_id == atracacao.navio_imo_id).first()
-                nome_navio = navio.nome if navio and navio.nome else "Desconhecido"
+                nome_navio = navio.nome if navio else "Desconhecido"
                 data_inicio = atracacao.data_hora_inicio.strftime("%Y-%m-%d %H:%M:%S") if atracacao.data_hora_inicio else "N/A"
-                print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga:<15}] - [OCUPADA] -> Navio: {nome_navio} (IMO: {navio.imo_id}) - Atracado desde: {data_inicio}")
+                print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {COR_VERMELHA}[OCUPADA]{RESET} -> Navio: {nome_navio} (IMO: {navio.imo_id}) - Atracado desde: {data_inicio}")
             else:
-                print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga:<15}] - [OCUPADA] -> (Sem atracação ativa registrada)")
+                print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {COR_VERMELHA}[OCUPADA]{RESET} -> (Sem atracação ativa registrada)")
         else:
-            print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga:<15}] - [LIVRE]")
+            print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {COR_VERDE}[LIVRE]{RESET}")
 
 def exibir_log_operacoes(session):
     """
     Exibe o histórico de atracações e desatracações, ordenado dos mais recentes para os mais antigos.
     """
     print(f"\n{'--- LOG DE OPERAÇÕES (HISTÓRICO) ---'}")
-    operacoes = session.query(Atracacao).order_by(Atracacao.data_hora_inicio.desc()).all()
+    atracacoes = session.query(Atracacao).all()
     
-    print(f"{'ID':<4} | {'NAVIO (IMO)':<15} | {'VAGA':<6} | {'INÍCIO':<20} | {'FIM':<20}")
-    print("-" * 75)
-    for op in operacoes:
-        inicio = op.data_hora_inicio.strftime("%Y-%m-%d %H:%M:%S") if op.data_hora_inicio else "N/A"
-        fim = op.data_hora_fim.strftime("%Y-%m-%d %H:%M:%S") if op.data_hora_fim else "Em andamento"
-        print(f"{op.id:<4} | {op.navio_imo_id:<15} | {op.vaga_id:<6} | {inicio:<20} | {fim:<20}")
+    if not atracacoes:
+        print("Nenhuma operação registrada no histórico.")
+        return
+        
+    eventos = []
+    for op in atracacoes:
+        eventos.append({
+            'id': op.id,
+            'tipo': 'ATRACAO',
+            'navio_imo_id': op.navio_imo_id,
+            'vaga_id': op.vaga_id,
+            'data_hora': op.data_hora_inicio
+        })
+        if op.data_hora_fim:
+            eventos.append({
+                'id': op.id,
+                'tipo': 'DESATRACAO',
+                'navio_imo_id': op.navio_imo_id,
+                'vaga_id': op.vaga_id,
+                'data_hora': op.data_hora_fim
+            })
+            
+    # Ordena os eventos do mais recente para o mais antigo
+    eventos.sort(key=lambda x: x['data_hora'], reverse=True)
+
+    COR_VERDE = "\033[92m"
+    COR_VERMELHA = "\033[91m"
+    RESET = "\033[0m"
+
+    print(f"{'DATA/HORA':<20} | {'EVENTO':<16} | {'NAVIO (IMO)':<15} | {'VAGA':<7} | {'OP ID'}")
+    print("-" * 77)
+    for ev in eventos:
+        data_str = ev['data_hora'].strftime("%Y-%m-%d %H:%M:%S")
+        imo = ev['navio_imo_id']
+        vaga = ev['vaga_id']
+        op_id = ev['id']
+        
+        if ev['tipo'] == 'ATRACAO':
+            evento_str = f"{COR_VERDE}{'[+] ATRACAÇÃO':<16}{RESET}"
+        else:
+            evento_str = f"{COR_VERMELHA}{'[-] DESATRACAÇÃO':<16}{RESET}"
+            
+        print(f"{data_str:<20} | {evento_str} | {imo:<15} | Vaga {vaga:<2} | OP-{op_id:03d}")

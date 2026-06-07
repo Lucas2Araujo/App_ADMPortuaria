@@ -22,7 +22,7 @@ class Navio(Base):
     __tablename__ = "navios"
 
     imo_id: Mapped[str] = mapped_column(String(20), primary_key=True)
-    nome: Mapped[str] = mapped_column(String(100), nullable=True) # Nome do navio original
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
     nome_capitao: Mapped[str] = mapped_column(String(100))
     companhia: Mapped[str] = mapped_column(String(100))
     status: Mapped[StatusNavio] = mapped_column(Enum(StatusNavio), default=StatusNavio.PENDENTE)

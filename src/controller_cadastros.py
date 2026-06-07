@@ -51,13 +51,13 @@ def auditar_solicitacoes_pendentes(session):
                 while True:
                     escolha = input("Classifique a carga (1-4): ").strip()
                     if escolha == '1':
-                        carga.categoria, carga.eh_perecivel = 'ULTRA_PERECIVEL', True
+                        carga.categoria, carga.eh_perecivel = 'URGENTE_PERECIVEL', True
                         break
                     elif escolha == '2':
-                        carga.categoria, carga.eh_perecivel = 'ALTA_PERECIVEL', True
+                        carga.categoria, carga.eh_perecivel = 'ALTA_PERECIBILIDADE', True
                         break
                     elif escolha == '3':
-                        carga.categoria, carga.eh_perecivel = 'BAIXA_PERECIVEL', True
+                        carga.categoria, carga.eh_perecivel = 'BAIXA_PERECIBILIDADE', True
                         break
                     elif escolha == '4':
                         carga.categoria, carga.eh_perecivel = 'COMUM', False
