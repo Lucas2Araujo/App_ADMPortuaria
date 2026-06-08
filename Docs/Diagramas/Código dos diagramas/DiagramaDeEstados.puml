@@ -4,19 +4,23 @@ title Diagrama de Estados: Estados do Navio
 skinparam state {
     RoundCorner 20
     BackgroundColor White
-    }
+}
 
-state Navio
-state "Pré-cadastrado" as PreCadastrado
-state "Aguardando documentação" as AguardandoDoc
-state "Cadastro concluído" as CadastroConcluido
-state "Navio liberado" as NavioLiberado
+[*] --> Pendente : solicitar_pre_cadastro()
 
-[*] --> Navio
+state Pendente
+state Validado
+state Rejeitado
+
+Pendente --> Validado : _auditar_documentacao_navio(documento_alfandega=True)
+Pendente --> Rejeitado : _auditar_documentacao_navio(documento_alfandega=False)
+Rejeitado --> Pendente : solicitar_pre_cadastro()
 
 Navio --> PreCadastrado : SolicitarCadastro()
 
-PreCadastrado --> AguardandoDoc : SolicitarDocumentação()
+Validado --> EmFila : calcular_score()
+EmFila --> Atracado : atracar_navio()
+Atracado --> Finalizado : registrar_desatracacao()
 
 AguardandoDoc --> Aprovado :  SolicitarDocumentação('aprovada')
 AguardandoDoc --> Reprovado : SolicitarDocumentação('reprovada')

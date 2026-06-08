@@ -1,56 +1,62 @@
 @startuml
-title Modelo de Domínio: Administração Portuária (v3)
+title Modelo de Domínio: Administração Portuária (Iteração Final - Sprint 1)
 skinparam classAttributeIconSize 0
 
 class Navio {
-- imoID: String
+  - imo_id: String
   - nome: String
-  - comandante: String
+  - nome_capitao: String
+  - companhia: String
   - status: StatusNavio
-  - dataSolicitacao: DateTime
-  + solicitarPreCadastro()
-  + solicitarDocumentação()
-  + EnviarCadastro()
-  
+  - data_solicitacao: DateTime
 }
 
 class Carga {
-  - idCarga: Integer
+  - id: Integer
   - descricao: String
-  - quantidadeToneladas: Double
-  - ehPerecivel: Boolean
-  - statusAlfandega: String
-  - documentosAnexos: String
-  + solicitarLiberacaoAduaneira()
+  - categoria: String
+  - quantidade_toneladas: Integer
+  - eh_perecivel: Boolean
+  - documento_alfandega: Boolean
 }
 
 class Vaga {
-  - idVaga: Integer
+  - id: Integer
+  - tipo_vaga: String
   - status: StatusVaga
-  + atualizarStatus(novoStatus: StatusVaga)
-  + verificarDisponibilidade(): Boolean
-}
-
-class FilaAtracacao {
-  - idFila: Integer
-  - dataHoraEntrada: DateTime
-  - dataHoraSaida: DateTime
-  - nivelPrioridade: Integer
-  + CalcularPrioridade(carga: Carga)
-  + chamarNavio(): Navio
 }
 
 class Atracacao {
-  - dataHoraInicio: DateTime
-  - dataHoraFim: DateTime
-  + calcularTempoTotal()
-  + finalizarAtracacao()
+  - id: Integer
+  - data_hora_inicio: DateTime
+  - data_hora_fim: DateTime
 }
 
-' Relacionamentos
+class ControladorCadastros <<Service>> {
+  + solicitar_pre_cadastro()
+  + auditar_solicitacoes_pendentes()
+  - _solicitar_classificacao_carga()
+  - _auditar_documentacao_navio()
+}
+
+class MotorDeFila <<Service>> {
+  + calcular_score(navio: Navio)
+  + obter_proximo_da_fila(): Navio
+}
+
+class ControladorOperacao <<Service>> {
+  + atracar_navio()
+  + registrar_desatracacao()
+}
+
+' Relacionamentos do Banco de Dados
 Navio "1" *-- "1..*" Carga : transporta >
 Navio "0..*" -- "1" Vaga : ocupa >
 (Navio, Vaga) .. Atracacao
-Navio "1" -- "0..1" FilaAtracacao : aguarda em >
+
+' Dependências das Camadas de Serviço
+ControladorCadastros ..> Navio : gerencia >
+MotorDeFila ..> Navio : prioriza >
+ControladorOperacao ..> Atracacao : registra >
 
 @enduml

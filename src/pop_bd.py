@@ -2,24 +2,21 @@ from faker import Faker
 import random
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from cad import Base, Navio, Carga
+from cad import Base, Navio, Carga, StatusNavio, Vaga, StatusVaga
 
-# Configuração do Banco de Dados
 ENGINE = create_engine("sqlite:///porto.db")
 Base.metadata.create_all(ENGINE)
 
-# Inicializa o Faker
 fake = Faker('pt_BR')
 
-# Mapeamento de cargas por categoria baseado em ord_propriety.py
 MAPA_CARGAS = {
-    'Vacinas': 'ULTRA_PERECIVEL',
-    'Carne Bovina': 'ULTRA_PERECIVEL',
-    'Peixes': 'ULTRA_PERECIVEL',
-    'Frutas': 'ALTA_PERECIVEL',
-    'Verduras': 'ALTA_PERECIVEL',
-    'Grãos': 'BAIXA_PERECIVEL',
-    'Biscoitos': 'BAIXA_PERECIVEL',
+    'Vacinas': 'URGENTE_PERECIVEL',
+    'Carne Bovina': 'URGENTE_PERECIVEL',
+    'Peixes': 'URGENTE_PERECIVEL',
+    'Frutas': 'ALTA_PERECIBILIDADE',
+    'Verduras': 'ALTA_PERECIBILIDADE',
+    'Grãos': 'BAIXA_PERECIBILIDADE',
+    'Biscoitos': 'BAIXA_PERECIBILIDADE',
     'Petróleo': 'COMUM',
     'Minério de Ferro': 'COMUM',
     'Containers': 'COMUM',
@@ -41,7 +38,8 @@ def gerar_navios_fake(quantidade=10):
                 imo_id = f"IMO{fake.unique.random_number(digits=7, fix_len=True)}",
                 nome = fake.first_name().upper() + " " + fake.last_name().upper(),
                 nome_capitao = fake.name(),
-                companhia = fake.company()
+                companhia = fake.company(),
+                status = random.choice([StatusNavio.PENDENTE, StatusNavio.VALIDADO])
             )
             
             num_cargas = random.randint(5, 10)
@@ -49,18 +47,21 @@ def gerar_navios_fake(quantidade=10):
             produtos_disponiveis = list(MAPA_CARGAS.keys())
             
             for _ in range(num_cargas):
-                if total_toneladas >= 40:
+                if total_toneladas >= 80:
                     break
                     
                 toneladas = random.randint(1, 15)
-                if total_toneladas + toneladas > 40:
-                    toneladas = 40 - total_toneladas
+                if total_toneladas + toneladas > 80:
+                    toneladas = 80 - total_toneladas
                     
                 descricao = random.choice(produtos_disponiveis)
+                categoria = MAPA_CARGAS[descricao]
+                eh_perecivel = categoria in ['URGENTE_PERECIVEL', 'ALTA_PERECIBILIDADE', 'BAIXA_PERECIBILIDADE']
                 nova_carga = Carga(
                     descricao=descricao,
-                    categoria=MAPA_CARGAS[descricao],
-                    quantidade_toneladas=toneladas
+                    categoria=categoria,
+                    quantidade_toneladas=toneladas,
+                    eh_perecivel=eh_perecivel
                 )
                 novo_navio.cargas.append(nova_carga)
                 total_toneladas += toneladas
@@ -71,7 +72,7 @@ def gerar_navios_fake(quantidade=10):
         print("Sucesso: Dados persistidos!")
 
 def verificar_integridade():
-    """Consulta o banco de dados para verificar se os dados foram inseridos corretamente"""
+    """Consulta o banco de dados paraverificar se os dados foram inseridos corretamente"""
     print("\n--- Verificação de Integridade ---")
     with Session(ENGINE) as session:
         navios = session.query(Navio).all()
@@ -93,6 +94,41 @@ def verificar_integridade():
         else:
             print("Aviso: Nenhum dado encontrado no banco.")
 
+def gerar_vagas_iniciais(session, quantidade: int = 5):
+    """Verifica se existem vagas. Se não, cria a quantidade especificada com nomes genéricos."""
+    if session.query(Vaga).count() == 0:
+        print(f"\nCriando {quantidade} vagas iniciais...")
+        for i in range(1, quantidade + 1):
+            vaga = Vaga(
+                tipo_vaga=f"Terminal {i}",
+                status=StatusVaga.LIVRE
+            )
+            session.add(vaga)
+        session.commit()
+        print("Vagas iniciais geradas com sucesso!")
+
 if __name__ == "__main__":
-    gerar_navios_fake(10)
-    verificar_integridade()
+    print("--- GERADOR DE BANCO DE DADOS ---")
+    print("Atenção: Esta operação irá APAGAR o banco 'porto.db' existente e criar um novo.")
+    confirm = input("Deseja continuar? (S/N): ").strip().upper()
+
+    if confirm in ('S', 'SIM', 'Y', 'YES'):
+        Base.metadata.drop_all(ENGINE)
+        Base.metadata.create_all(ENGINE)
+        print("Banco de dados anterior removido.")
+
+        try:
+            qtd_navios = int(input("Quantidade de navios para gerar: "))
+            qtd_vagas = int(input("Quantidade de berços (terminais) para criar: "))
+
+            if qtd_navios <= 0 or qtd_vagas <= 0:
+                print("Erro: As quantidades devem ser maiores que zero.")
+            else:
+                with Session(ENGINE) as session:
+                    gerar_vagas_iniciais(session, quantidade=qtd_vagas)
+                gerar_navios_fake(quantidade=qtd_navios)
+                verificar_integridade()
+        except ValueError:
+            print("Erro: Digite um número inteiro válido.")
+    else:
+        print("Operação cancelada.")
