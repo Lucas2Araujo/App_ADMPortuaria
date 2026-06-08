@@ -41,7 +41,7 @@ jobs:
 
       - name: 🔨 Compilar com PyInstaller
         # Se o app.py estiver na pasta src, mude para src/app.py
-        run: pyinstaller --onefile --name ${{ matrix.artifact_name }} app.py
+        run: pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
 
       - name: 📤 Guardar Binário Temporariamente
         uses: actions/upload-artifact@v4
