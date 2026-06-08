@@ -1,41 +1,29 @@
 @startuml
-title Diagrama de Sequência: Auto-Cadastro e Validação de Descarga
-hide footbox
+title Diagrama de Estados: Ciclo de Vida do Navio
 
-actor "Tripulação do Navio" as Crew
-actor "Admin do Porto" as Admin
-participant "app.py (CLI)" as CLI
-participant "controller_cadastros" as CtrlCad
-database "porto.db (SQLAlchemy)" as DB
+skinparam state {
+    RoundCorner 20
+    BackgroundColor White
+}
 
-Crew -> CLI: Acessa Portal da Tripulação -> Solicitar Pré-Cadastro
-activate CLI
-CLI -> CtrlCad: solicitar_pre_cadastro(session, imo, nome, nome_capitao, companhia, carga_desc, categoria, peso, eh_perecivel, possui_documentos)
-activate CtrlCad
-CtrlCad -> DB: Cria Navio com status padrão StatusNavio.PENDENTE
-CtrlCad -> DB: Salva Manifesto em Carga (dAlfandega recebe flag booleana)
-CtrlCad -> DB: session.commit()
-CtrlCad --> CLI: Exibe mensagem de sucesso e protocolo gerado
-deactivate CtrlCad
-deactivate CLI
+[*] --> Pendente : solicitar_pre_cadastro()
 
-note over DB: O navio permanece isolado com status PENDENTE.\nEle não é contabilizado nos cálculos da fila oficial.
+state Pendente
+state Validado
+state Rejeitado
 
-Admin -> CLI: Acessa Painel Administrativo -> Auditar Solicitações
-activate CLI
-CLI -> CtrlCad: auditar_solicitacoes_pendentes(session)
-activate CtrlCad
-CtrlCad -> DB: Executa query filtrando por StatusNavio.PENDENTE
+Pendente --> Validado : _auditar_documentacao_navio(documento_alfandega=True)
+Pendente --> Rejeitado : _auditar_documentacao_navio(documento_alfandega=False)
+Rejeitado --> Pendente : solicitar_pre_cadastro()
 
-alt Caso de Exceção: Documentação Incompleta (any carga.dAlfandega == False)
-    CtrlCad -> DB: Atualiza navio.status = StatusNavio.REJEITADO
-    CtrlCad -> DB: session.commit()
-    CtrlCad --> CLI: Aviso de rejeição emitido no terminal
-else Fluxo Principal: Documentação Válida (all cargas.dAlfandega == True)
-    CtrlCad -> DB: Atualiza navio.status = StatusNavio.VALIDADO
-    CtrlCad -> DB: session.commit()
-    CtrlCad --> CLI: Confirmação: Navio validado e inserido na fila
-end
-deactivate CtrlCad
-deactivate CLI
+state "Em Fila" as EmFila
+state Atracado
+state Finalizado
+
+Validado --> EmFila : calcular_score()
+EmFila --> Atracado : atracar_navio()
+Atracado --> Finalizado : registrar_desatracacao()
+
+Finalizado --> [*]
+
 @enduml

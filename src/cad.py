@@ -25,7 +25,7 @@ class Navio(Base):
     nome: Mapped[str] = mapped_column(String(100), nullable=False)
     nome_capitao: Mapped[str] = mapped_column(String(100))
     companhia: Mapped[str] = mapped_column(String(100))
-    status: Mapped[StatusNavio] = mapped_column(Enum(StatusNavio), default=StatusNavio.PENDENTE)
+    status: Mapped[StatusNavio] = mapped_column(Enum(StatusNavio), default=StatusNavio.PENDENTE, index=True)
     data_solicitacao: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     cargas: Mapped[List["Carga"]] = relationship(back_populates="navio", cascade="all, delete-orphan")
     
@@ -41,7 +41,7 @@ class Carga(Base):
     categoria: Mapped[str] = mapped_column(String(50))
     quantidade_toneladas: Mapped[int] = mapped_column(Integer)
     eh_perecivel: Mapped[bool] = mapped_column(Boolean, default=False)
-    dAlfandega: Mapped[bool] = mapped_column(Boolean, default=False)
+    documento_alfandega: Mapped[bool] = mapped_column(Boolean, default=False)
 
     navio: Mapped["Navio"] = relationship(back_populates="cargas")
 
@@ -50,13 +50,13 @@ class Vaga(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tipo_vaga: Mapped[str] = mapped_column(String(50))
-    status: Mapped[StatusVaga] = mapped_column(Enum(StatusVaga), default=StatusVaga.LIVRE)
+    status: Mapped[StatusVaga] = mapped_column(Enum(StatusVaga), default=StatusVaga.LIVRE, index=True)
 
 class Atracacao(Base):
     __tablename__ = "atracacoes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    navio_imo_id: Mapped[str] = mapped_column(ForeignKey("navios.imo_id"))
-    vaga_id: Mapped[int] = mapped_column(ForeignKey("vagas.id"))
+    navio_imo_id: Mapped[str] = mapped_column(ForeignKey("navios.imo_id"), index=True)
+    vaga_id: Mapped[int] = mapped_column(ForeignKey("vagas.id"), index=True)
     data_hora_inicio: Mapped[datetime] = mapped_column(DateTime)
-    data_hora_fim: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    data_hora_fim: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)

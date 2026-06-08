@@ -4,14 +4,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from cad import Base, Navio, Carga, StatusNavio, Vaga, StatusVaga
 
-# Configuração do Banco de Dados
 ENGINE = create_engine("sqlite:///porto.db")
 Base.metadata.create_all(ENGINE)
 
-# Inicializa o Faker
 fake = Faker('pt_BR')
 
-# Mapeamento de cargas por categoria baseado em ord_propriety.py
 MAPA_CARGAS = {
     'Vacinas': 'URGENTE_PERECIVEL',
     'Carne Bovina': 'URGENTE_PERECIVEL',
@@ -50,12 +47,12 @@ def gerar_navios_fake(quantidade=10):
             produtos_disponiveis = list(MAPA_CARGAS.keys())
             
             for _ in range(num_cargas):
-                if total_toneladas >= 40:
+                if total_toneladas >= 80:
                     break
                     
                 toneladas = random.randint(1, 15)
-                if total_toneladas + toneladas > 40:
-                    toneladas = 40 - total_toneladas
+                if total_toneladas + toneladas > 80:
+                    toneladas = 80 - total_toneladas
                     
                 descricao = random.choice(produtos_disponiveis)
                 categoria = MAPA_CARGAS[descricao]
@@ -75,7 +72,7 @@ def gerar_navios_fake(quantidade=10):
         print("Sucesso: Dados persistidos!")
 
 def verificar_integridade():
-    """Consulta o banco de dados para verificar se os dados foram inseridos corretamente"""
+    """Consulta o banco de dados paraverificar se os dados foram inseridos corretamente"""
     print("\n--- Verificação de Integridade ---")
     with Session(ENGINE) as session:
         navios = session.query(Navio).all()

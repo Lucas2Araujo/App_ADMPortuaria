@@ -4,7 +4,7 @@ title Diagrama de Atividades: Gestão de Fluxo Portuário (Refatorado para Sprin
 |Tripulação do Navio|
 start
 :Solicitar Pré-Cadastro (Navio e Cargas);
-note right: Informa a categoria da carga\ne submete documentos (dAlfandega)
+note right: Informa a categoria da carga\ne submete documentos (documento_alfandega)
 
 |Administrador do Porto|
 :Auditar Solicitações Pendentes;
