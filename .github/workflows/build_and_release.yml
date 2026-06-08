@@ -6,7 +6,7 @@ on:
       tag_name:
         description: 'Tag da Versão (ex: v1.0.0)'
         required: true
-        default: 'v0.0.1'
+        default: 'v1.0.0'
       release_title:
         description: 'Título da Release (ex: Sprint 1 - Versão Final)'
         required: true
@@ -17,7 +17,6 @@ jobs:
     name: Compilar Executáveis
     runs-on: ${{ matrix.os }}
     strategy:
-      # Impede que o cancelamento de um SO aborte o outro
       fail-fast: false
       matrix:
         include:
@@ -36,14 +35,13 @@ jobs:
           python-version: '3.10'
 
       - name: 📦 Instalar Dependências e PyInstaller
-        # Trocamos o requirements.txt pela instalação explícita dos pacotes
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller sqlalchemy faker
 
       - name: 🔨 Compilar com PyInstaller
-        # ATENÇÃO: Se o seu app.py estiver dentro de uma pasta chamada "src", mude o "app.py" abaixo para "src/app.py"
-        run: pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
+        # Se o app.py estiver na pasta src, mude para src/app.py
+        run: pyinstaller --onefile --name ${{ matrix.artifact_name }} app.py
 
       - name: 📤 Guardar Binário Temporariamente
         uses: actions/upload-artifact@v4
@@ -62,13 +60,17 @@ jobs:
       - name: 📥 Baixar Binários Compilados
         uses: actions/download-artifact@v4
         with:
-          path: binarios/
+          path: binarios_temp/
 
       - name: 🔐 Gerar Hashes SHA-256 e Organizar Arquivos
         run: |
-          cd binarios
-          mv Adm_Porto/Adm_Porto .
-          mv Adm_Porto.exe/Adm_Porto.exe .
+          mkdir arquivos_finais
+          
+          # Move os arquivos das subpastas para a nova pasta limpa
+          mv binarios_temp/Adm_Porto/Adm_Porto arquivos_finais/
+          mv binarios_temp/Adm_Porto.exe/Adm_Porto.exe arquivos_finais/
+          
+          cd arquivos_finais
           sha256sum Adm_Porto Adm_Porto.exe > checksums_oficiais.txt
           cat checksums_oficiais.txt
 
@@ -77,18 +79,18 @@ jobs:
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}
           files: |
-            binarios/Adm_Porto
-            binarios/Adm_Porto.exe
+            arquivos_finais/Adm_Porto
+            arquivos_finais/Adm_Porto.exe
 
       - name: 🚀 Criar Nova Release e Fazer Upload dos Arquivos
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd binarios
+          cd arquivos_finais
           gh release create "${{ github.event.inputs.tag_name }}" \
             Adm_Porto \
             Adm_Porto.exe \
             checksums_oficiais.txt \
             --title "${{ github.event.inputs.release_title }}" \
-            --notes "Release gerada de forma 100% automatizada via GitHub Actions. Os executáveis foram compilados em ambientes limpos e verificados criptograficamente." \
+            --notes "Release gerada de forma automatizada via GitHub Actions. Os executáveis foram verificados criptograficamente e analisados via VirusTotal." \
             --repo ${{ github.repository }}
