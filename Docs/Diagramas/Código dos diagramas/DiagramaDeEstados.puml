@@ -1,5 +1,5 @@
 @startuml
-title Diagrama de Estados: Ciclo de Vida do Navio
+title Diagrama de Estados: Estados do Navio
 
 skinparam state {
     RoundCorner 20
@@ -16,14 +16,27 @@ Pendente --> Validado : _auditar_documentacao_navio(documento_alfandega=True)
 Pendente --> Rejeitado : _auditar_documentacao_navio(documento_alfandega=False)
 Rejeitado --> Pendente : solicitar_pre_cadastro()
 
-state "Em Fila" as EmFila
-state Atracado
-state Finalizado
+Navio --> PreCadastrado : SolicitarCadastro()
 
 Validado --> EmFila : calcular_score()
 EmFila --> Atracado : atracar_navio()
 Atracado --> Finalizado : registrar_desatracacao()
 
-Finalizado --> [*]
+AguardandoDoc --> Aprovado :  SolicitarDocumentação('aprovada')
+AguardandoDoc --> Reprovado : SolicitarDocumentação('reprovada')
+
+Reprovado --> [*]
+
+Aprovado --> CadastroConcluido
+
+CadastroConcluido --> Cadastrado : EnviarCadastro()
+
+Cadastrado --> Fila : CalcularPrioridade()
+
+Fila --> Atracado : chamarNavio()
+
+Atracado --> NavioLiberado : finalizarAtracacao()
+
+NavioLiberado --> [*]
 
 @enduml
