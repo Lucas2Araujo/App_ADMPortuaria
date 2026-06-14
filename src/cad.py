@@ -2,33 +2,54 @@ import enum
 from datetime import datetime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime, Enum
-from typing import List, Optional
+from typing import List, Optional, Tuple
+
 
 class StatusNavio(enum.Enum):
+    """Enum para representar os possíveis status de um navio no sistema."""
     PENDENTE = "PENDENTE"
     VALIDADO = "VALIDADO"
     REJEITADO = "REJEITADO"
     ATRACADO = "ATRACADO"
     FINALIZADO = "FINALIZADO"
 
+
 class StatusVaga(enum.Enum):
+    """Enum para representar os possíveis status de uma vaga no cais."""
     LIVRE = "LIVRE"
     OCUPADA = "OCUPADA"
 
+
 class Base(DeclarativeBase):
+    """Classe base declarativa para os modelos SQLAlchemy."""
     pass
 
+
 class Navio(Base):
+    """
+    Modelo de dados para representar um Navio.
+
+    Atributos:
+        imo_id (str): Identificador único IMO (International Maritime Organization) do navio. Chave primária.
+        nome (str): Nome do navio.
+        nome_capitao (str): Nome do capitão atual do navio.
+        companhia (str): Companhia de navegação à qual o navio pertence.
+        status (StatusNavio): Status atual do navio no porto (PENDENTE, VALIDADO, etc.).
+        data_solicitacao (datetime): Data e hora da solicitação de pré-cadastro.
+        cargas (List[Carga]): Lista de cargas associadas a este navio (relacionamento one-to-many).
+    """
     __tablename__ = "navios"
 
     imo_id: Mapped[str] = mapped_column(String(20), primary_key=True)
     nome: Mapped[str] = mapped_column(String(100), nullable=False)
     nome_capitao: Mapped[str] = mapped_column(String(100))
     companhia: Mapped[str] = mapped_column(String(100))
-    status: Mapped[StatusNavio] = mapped_column(Enum(StatusNavio), default=StatusNavio.PENDENTE, index=True)
+    status: Mapped[StatusNavio] = mapped_column(Enum(StatusNavio), default=StatusNavio.PENDENTE,
+                                                 index=True)
     data_solicitacao: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    cargas: Mapped[List["Carga"]] = relationship(back_populates="navio", cascade="all, delete-orphan")
-    
+    cargas: Mapped[List["Carga"]] = relationship(back_populates="navio",
+                                                  cascade="all, delete-orphan")
+
     def __repr__(self) -> str:
         return f"Navio(imo_id={self.imo_id!r}, capitão={self.nome_capitao!r}, companhia={self.companhia!r})"
 

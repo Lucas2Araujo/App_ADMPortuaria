@@ -85,12 +85,32 @@ def registrar_desatracacao(session, imo_id: str):
     return atracacao
 
 def _imprimir_cabecalho_dashboard(total_vagas, vagas_livres, vagas_ocupadas):
+    """
+    Imprime o cabeçalho formatado para o dashboard de vagas.
+
+    Args:
+        total_vagas (int): Número total de vagas cadastradas.
+        vagas_livres (int): Número de vagas atualmente livres.
+        vagas_ocupadas (int): Número de vagas atualmente ocupadas.
+    """
     print("\n" + "=" * 70)
     print("DASHBOARD DO PORTO - STATUS DAS VAGAS")
     print(f"Total: {total_vagas} | Disponíveis: {vagas_livres} | Ocupadas: {vagas_ocupadas}")
     print("=" * 70)
 
 def _imprimir_detalhe_vaga(vaga, mapa_atracacoes, mapa_navios, COR_VERDE, COR_VERMELHA, RESET):
+    """
+    Imprime os detalhes de uma única vaga, indicando seu status e, se ocupada,
+    o navio correspondente.
+
+    Args:
+        vaga (Vaga): Objeto da vaga a ser exibida.
+        mapa_atracacoes (dict): Dicionário mapeando ID da vaga para o objeto Atracacao ativa.
+        mapa_navios (dict): Dicionário mapeando IMO do navio para o objeto Navio.
+        COR_VERDE (str): Código ANSI para cor verde.
+        COR_VERMELHA (str): Código ANSI para cor vermelha.
+        RESET (str): Código ANSI para resetar a cor do terminal.
+    """
     if vaga.status != StatusVaga.OCUPADA:
         print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {COR_VERDE}[LIVRE]{RESET}")
         return

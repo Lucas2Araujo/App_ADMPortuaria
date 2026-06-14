@@ -54,7 +54,7 @@ def solicitar_pre_cadastro(session, imo: str, nome: str, capitao: str, companhia
 
 def _solicitar_classificacao_carga(carga, nome_navio):
     """
-    Solicita interativamente a classificação de uma carga não categorizada no terminal.
+    Solicita interativamente a classificação de uma carga com categoria 'OUTROS_PENDENTE' no terminal.
     
     Args:
         carga (Carga): Objeto carga que não possui categoria definida (Outros).
@@ -83,6 +83,7 @@ def _auditar_documentacao_navio(navio):
     
     Args:
         navio (Navio): A instância do navio sendo analisada. Altera o status para `VALIDADO` se possuir documentos ou `REJEITADO` caso falte de alguma carga.
+        Após a auditoria, o navio é definido como `VALIDADO` (se todos os documentos estiverem ok) ou `REJEITADO` (se houver pendências).
     """
     # Regra de Negócio: A ausência de documentação aduaneira de qualquer carga bloqueia a entrada do navio na fila de atracação.
     if any(not carga.documento_alfandega for carga in navio.cargas):
