@@ -1,3 +1,9 @@
+"""
+Módulo Controlador de Operações de Fila e Atracação.
+
+Este módulo processa a movimentação de navios, atracação em vagas livres e
+a geração de histórico (logs) das operações em tempo real.
+"""
 from datetime import datetime
 from cad import Vaga, Atracacao, StatusVaga, StatusNavio, Navio
 from ord_propriety import obter_proximo_da_fila
@@ -10,6 +16,12 @@ def atracar_navio(session):
     """
     Busca o próximo navio da fila e o aloca na primeira vaga disponível.
     Altera o status do navio, da vaga e gera o histórico de atracação.
+
+    Args:
+        session (Session): Sessão ativa do SQLAlchemy conectada ao banco de dados.
+
+    Returns:
+        Atracacao | None: O objeto `Atracacao` recém-registrado, ou `None` se a atracação falhar.
     """
     navio = obter_proximo_da_fila(session)
     if not navio:
@@ -40,6 +52,13 @@ def registrar_desatracacao(session, imo_id: str):
     """
     Busca a atracação em aberto para o navio, registra o fim da operação
     e libera a vaga, mudando o status do navio para finalizado.
+
+    Args:
+        session (Session): Sessão ativa do SQLAlchemy.
+        imo_id (str): O código IMO do navio que deve realizar a desatracação.
+
+    Returns:
+        Atracacao | None: O objeto `Atracacao` finalizado, ou `None` caso não encontre atracação ativa.
     """
     atracacao = session.query(Atracacao).filter(
         Atracacao.navio_imo_id == imo_id,
@@ -90,6 +109,9 @@ def exibir_painel_vagas(session):
     """
     Exibe o painel atualizado com todas as vagas cadastradas.
     Mostra qual navio está ocupando a vaga, caso não esteja livre.
+
+    Args:
+        session (Session): Sessão ativa do banco de dados.
     """
     vagas = session.query(Vaga).all()
     
@@ -114,6 +136,13 @@ def exibir_painel_vagas(session):
         _imprimir_detalhe_vaga(vaga, mapa_atracacoes, mapa_navios, COR_VERDE, COR_VERMELHA, RESET)
 
 def exibir_log_operacoes(session):
+    """
+    Busca e exibe o histórico cronológico de todas as atracações e desatracações 
+    que ocorreram no porto.
+    
+    Args:
+        session (Session): Sessão ativa do banco de dados.
+    """
     print(f"\n{'--- LOG DE OPERAÇÕES (HISTÓRICO) ---'}")
     atracacoes = session.query(Atracacao).all()
     

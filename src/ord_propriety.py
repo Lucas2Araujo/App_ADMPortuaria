@@ -1,3 +1,9 @@
+"""
+Motor de Regras de Negócio e Fila de Atracação.
+
+Possui as funções responsáveis por ordenar a fila de atracação dinamicamente
+utilizando cálculos de pontuação baseados na perecibilidade e regras anti-starvation.
+"""
 from datetime import datetime
 from sqlalchemy import case, func, select, cast, Integer
 from sqlalchemy.orm import joinedload, Session
@@ -11,7 +17,15 @@ PESOS_CATEGORIA = {
 }
 
 def calcular_score(navio: Navio) -> float:
-    """Calcula o score de prioridade de um navio no banco de dados"""
+    """
+    Calcula matematicamente a pontuação de prioridade de um navio em Python.
+    
+    Args:
+        navio (Navio): A instância da classe `Navio` a ter a pontuação calculada.
+    
+    Returns:
+        float: Score calculado a partir dos multiplicadores de carga e envelhecimento.
+    """
     score_total = 0
     maior_grau_perecivel = 0
 
@@ -35,7 +49,13 @@ def calcular_score(navio: Navio) -> float:
     return score_total
 
 def criar_subquery_score_cargas():
-    """Cria uma subquery para calcular o score base e o bônus de perecibilidade nativamente no SQL."""
+    """
+    Delega a lógica do bônus de perecibilidade como uma Subquery no SQL.
+    
+    Returns:
+        Subquery: Expressão em SQLAlchemy Select otimizada para o banco SQLite contendo 
+        o ID do navio e a coluna virtual 'score_cargas'.
+    """
     # 1. Transforma o dicionário PESOS_CATEGORIA em uma instrução CASE no SQL
     peso_categoria = case(
         (Carga.categoria == 'URGENTE_PERECIVEL', 3),
@@ -57,7 +77,16 @@ def criar_subquery_score_cargas():
     ).group_by(Carga.navio_imo_id).subquery()
 
 def obter_expressao_score_total(sq_cargas, agora):
-    """Gera a expressão Matemática SQL final combinando as cargas com o envelhecimento (tempo)."""
+    """
+    Gera a expressão SQL final combinando as cargas com o envelhecimento (Anti-starvation).
+    
+    Args:
+        sq_cargas (Subquery): O resultado da função `criar_subquery_score_cargas()`.
+        agora (datetime): Um timestamp representando o momento atual.
+    
+    Returns:
+        ColumnElement: A expressão algébrica em SQLAlchemy mesclando peso de cargas e espera na fila.
+    """
     # O SQLite calcula diferença de segundos de forma mais eficiente via UNIX Timestamps ('%s')
     segundos_espera = cast(func.strftime('%s', agora), Integer) - cast(func.strftime('%s', Navio.data_solicitacao), Integer)
     horas_espera = segundos_espera / 3600.0
@@ -67,7 +96,15 @@ def obter_expressao_score_total(sq_cargas, agora):
     return func.coalesce(sq_cargas.c.score_cargas, 0) + func.coalesce(bonus_tempo, 0)
 
 def obter_proximo_da_fila(session):
-    """Calcula e delega totalmente a ordenação ao Banco de Dados, trazendo O(1) objeto."""
+    """
+    Obtém em tempo ótimo O(1) o navio que tem mais prioridade (Maior Score).
+    
+    Args:
+        session (Session): Conexão aberta com o banco.
+        
+    Returns:
+        Navio | None: Apenas a instância do navio prioritário.
+    """
     sq = criar_subquery_score_cargas()
     score_total = obter_expressao_score_total(sq, datetime.now())
     
@@ -81,6 +118,9 @@ def exibir_fila_atracacao(session):
     """
     Exibe a fila de atracação atual no terminal, ordenada por prioridade (score).
     Mostra navios com status VALIDADO e calcula o tempo de espera.
+    
+    Args:
+        session (Session): Conexão aberta com o banco de dados.
     """
     agora = datetime.now()
     sq = criar_subquery_score_cargas()

@@ -1,5 +1,7 @@
 # Sistema de Administração Portuária
 
+[![Documentação Ativa](https://img.shields.io/badge/Documentação-Ativa-blue?style=for-the-badge&logo=markdown)](https://lucas2araujo.github.io/App_ADMPortuaria/)
+
 > **Disciplina:** Projeto e Desenvolvimento de Software (PDS)  
 > **Professor:** Davi Viana dos Santos  
 > **Instituição:** Universidade Federal do Maranhão (UFMA) - BICT / Engenharia da Computação  
@@ -24,6 +26,7 @@ A gestão da fila evita o travamento logístico do porto através de duas regras
 O projeto foi estruturado utilizando o padrão de **Camadas de Serviço (Controllers/Services)**, separando as entidades de persistência (`cad.py`) das regras de controle de negócios e fluxo de dados.
 
 * **Linguagem:** Python 3.10+
+* **Interface Gráfica (Frontend Sprint 2):** Flet (Aplicações multiplataforma em Python)
 * **ORM:** SQLAlchemy (Declarative Base)
 * **Banco de Dados:** SQLite (`porto.db`)
 * **Mock de Dados:** Faker (Para simulação de massa de dados em testes corporativos)
@@ -84,4 +87,3 @@ python src/pop_bd.py
 
 # 6. Inicialize a aplicação oficial
 python src/app.py
-

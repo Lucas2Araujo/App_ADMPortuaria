@@ -1,0 +1,41 @@
+site_name: App ADMPortuaria
+site_description: Documentação do Sistema de Administração Portuária
+site_author: Lucas & Equipe
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+
+nav:
+  - Início: index.md
+  - Material de Referência (Diagramas): diagramas.md
+  - Referência da API (Backend):
+    - Banco de Dados (Models): api/cad.md
+    - Controladores de Cadastro: api/cadastros.md
+    - Controladores de Operação: api/operacoes.md
+    - Fila de Atracação: api/ord_propriety.md

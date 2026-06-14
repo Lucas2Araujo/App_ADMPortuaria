@@ -61,7 +61,8 @@ def gerar_navios_fake(quantidade=10):
                     descricao=descricao,
                     categoria=categoria,
                     quantidade_toneladas=toneladas,
-                    eh_perecivel=eh_perecivel
+                    eh_perecivel=eh_perecivel,
+                    documento_alfandega=random.choice([True, True, True, False])
                 )
                 novo_navio.cargas.append(nova_carga)
                 total_toneladas += toneladas
