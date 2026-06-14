@@ -68,22 +68,23 @@ Como resolver: Quando a tela azul do SmartScreen aparecer, clique no link "Mais 
 Caso prefira rodar ou auditar o código diretamente no seu ambiente de desenvolvimento:
 
 Bash
-# 1. Clone o repositório oficial
+1. Clone o repositório oficial
 git clone [https://github.com/Lucas2Araujo/App_ADMPortuaria](https://github.com/Lucas2Araujo/App_ADMPortuaria)
 
-# 2. Acesse o diretório raiz do projeto
+2. Acesse o diretório raiz do projeto
 cd App_ADMPortuaria
 
-# 3. Crie e ative um ambiente virtual (Recomendado)
+3. Crie e ative um ambiente virtual (Recomendado)
 python3 -m venv venv
 source venv/bin/activate  # No Linux (Nobara/Ubuntu)
+
 # No Windows: .\venv\Scripts\activate
 
-# 4. Instale as dependências requeridas
+4. Instale as dependências requeridas
 pip install -r requirements.txt
 
-# 5. Opcional - Popular o banco com dados simulados (Faker)
+5. Opcional - Popular o banco com dados simulados (Faker)
 python src/pop_bd.py
 
-# 6. Inicialize a aplicação oficial
+6. Inicialize a aplicação oficial
 python src/app.py
