@@ -22,7 +22,7 @@ jobs:
           python-version: '3.10'
           
       - name: Instalar dependências do MkDocs
-        run: pip install mkdocs-material mkdocstrings[python]
+        run: pip install mkdocs-material mkdocstrings[python] mkdocs-glightbox
         
       - name: Construir site e publicar no GitHub Pages
         run: mkdocs gh-deploy --force
