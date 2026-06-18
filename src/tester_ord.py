@@ -99,7 +99,6 @@ class TestCalculoScore(unittest.TestCase):
         # O navio com carga urgente e pesada deve ter um score vastamente superior
         self.assertGreater(score_melhor, score_pior)
         
-        # Score_pior = 10 * 0 = 0
         self.assertAlmostEqual(score_pior, 0, delta=1)
         # Score_melhor = (10000 * 3) + 30000 (bônus máximo) = 60000
         self.assertAlmostEqual(score_melhor, 60000, delta=1)

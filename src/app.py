@@ -23,10 +23,15 @@ def limpar_tela():
 
 def _obter_imo():
     while True:
-        imo_num = input("Número do IMO (apenas números, ex: 1234567): ").strip()
+        imo_num = input("Informe os 7 dígitos númericos do IMO: ").strip()
         if imo_num.isdigit():
-            return f"IMO{imo_num}"
-        print("Erro: IMO inválido. Digite apenas números.")
+            if len(imo_num) == 7:
+                return f"IMO{imo_num}"
+            else:
+                print(f"IMO Inválido! Você digitou {len(imo_num)} dígitos. O padrão exige exatamente 7 dígitos!")
+        else:
+            print("Erro: O IMO deve conter apenas números.")
+
 
 def _obter_nome_valido(prompt, msg_erro_vazio):
     while True:
@@ -37,6 +42,15 @@ def _obter_nome_valido(prompt, msg_erro_vazio):
             print("Erro: O valor contém caracteres inválidos. Use apenas letras, números, espaços, hífens ou apóstrofos.")
         else:
             return nome
+def _obter_nome_edicao(prompt, valor_atual):
+    while True:
+        novo_valor = input(f"{prompt} [{valor_atual}]: ").strip()
+        if not novo_valor:
+            return valor_atual 
+        elif not re.fullmatch(REGEX_NOME_VALIDO, novo_valor):
+            print("Erro: O valor contém caracteres inválidos. Use apenas letras, números, espaços, hífens ou apóstrofos.")
+        else:
+            return novo_valor
 
 def _obter_descricao_personalizada():
     while True:
@@ -108,6 +122,23 @@ def coletar_dados_cadastro(session):
         carga_desc=carga_desc, categoria=categoria, peso=peso, eh_perecivel=eh_perecivel, 
         possui_documentos=possui_documentos
     )
+def editar_navio(session):
+    print("\n--- EDITAR DADOS DO NAVIO ---")
+    navio = _selecionar_ou_pesquisar_navio(session)
+    
+    if navio == "CANCELADO":
+        print(MSG_OPERACAO_CANCELADA)
+        return
+    if not navio:
+        return
+
+    print(f"\n Editando: {navio.nome} | Pressione ENTER para manter o valor atual.")
+    navio.nome = _obter_nome_edicao("Novo Nome", navio.nome)
+    navio.nome_capitao = _obter_nome_edicao("Novo Capitão", navio.nome_capitao)
+    navio.companhia = _obter_nome_edicao("Nova Companhia", navio.companhia)
+
+    session.commit()
+    print(f"\n Dados do navio {navio.imo_id} atualizados com sucesso no sistema!")
 
 def _atracar_lote(session):
     atr_count = 0
@@ -117,7 +148,7 @@ def _atracar_lote(session):
         
         if not vaga_livre or not navio_fila:
             if atr_count == 0:
-                atracar_navio(session)
+                print(f"\nOperação não concluída, checar se há navios para atracar ou vagas livres.")
             else:
                 print(f"\nOperação em lote concluída. {atr_count} navio(s) atracado(s) com sucesso!")
             break
@@ -156,44 +187,41 @@ def desatracar_navio(session):
     print("[T] Desatracar TODOS os navios")
     print(MSG_CANCELAR)
     
-    escolha_desatracar = input("Escolha o navio para desatracar: ").strip().upper()
+    escolha = input("\nEscolha o número, digite o IMO, ou [T] para todos: ").strip().upper()
     
-    if escolha_desatracar == '0':
+    if escolha == '0':
         print(MSG_OPERACAO_CANCELADA)
-    elif escolha_desatracar == 'T':
+    elif escolha == 'T':
         for atracacao in atracacoes_ativas:
             registrar_desatracacao(session, atracacao.navio_imo_id)
         print(f"\nSucesso: Todos os {len(atracacoes_ativas)} navios foram desatracados.")
-    elif escolha_desatracar.isdigit() and 1 <= int(escolha_desatracar) <= len(atracacoes_ativas):
-        idx = int(escolha_desatracar) - 1
-        imo_selecionado = atracacoes_ativas[idx].navio_imo_id
-        registrar_desatracacao(session, imo_selecionado)
+        
+    elif escolha.isdigit() and 1 <= int(escolha) <= len(atracacoes_ativas):
+        idx = int(escolha) - 1
+        registrar_desatracacao(session, atracacoes_ativas[idx].navio_imo_id)
+        
     else:
-        print(MSG_ERRO_OPCAO_INVALIDA)
+        imo_busca = escolha if escolha.startswith("IMO") else f"IMO{escolha}"
+        atracacao_encontrada = next((a for a in atracacoes_ativas if a.navio_imo_id == imo_busca), None)
+        
+        if atracacao_encontrada:
+            registrar_desatracacao(session, imo_busca)
+        else:
+            print(" Erro: Navio não encontrado na lista de atracados ou opção inválida.")
 
 def menu_excluir_navio(session):
-    todos_navios = session.query(Navio).all()
-    if not todos_navios:
-        print("Não há navios registrados no sistema.")
-        return
-
     print("\n--- EXCLUIR REGISTRO DE NAVIO ---")
-    for i, navio in enumerate(todos_navios, start=1):
-        print(f"[{i}] {navio.nome} (IMO: {navio.imo_id}) - Status: {navio.status.value}")
-    print(MSG_CANCELAR)
+    navio = _selecionar_ou_pesquisar_navio(session)
     
-    escolha_excluir = input("Escolha o navio para excluir: ").strip()
-    
-    if escolha_excluir == '0':
+    if navio == "CANCELADO":
         print(MSG_OPERACAO_CANCELADA)
-    elif escolha_excluir.isdigit() and 1 <= int(escolha_excluir) <= len(todos_navios):
-        idx = int(escolha_excluir) - 1
-        imo_selecionado = todos_navios[idx].imo_id
-        excluir_registro_navio(session, imo_selecionado)
-    else:
-        print(MSG_ERRO_OPCAO_INVALIDA)
+        return
+    if not navio:
+        return
+        
+    excluir_registro_navio(session, navio.imo_id)
 
-def _gerar_apenas_navios():
+def _gerar_apenas_navios(session):
     try:
         qtd_navios = int(input("Quantidade de navios para gerar: "))
         if qtd_navios > 0:
@@ -222,7 +250,7 @@ def _resetar_banco(session, engine):
                 print("Banco de dados anterior removido e recriado.")
                 
                 gerar_vagas_iniciais(session, quantidade=qtd_vagas)
-                gerar_navios_fake(quantidade=qtd_navios)
+                gerar_navios_fake(session, quantidade=qtd_navios)
         except ValueError:
             print("Erro: Digite um número inteiro válido.")
     else:
@@ -237,7 +265,7 @@ def menu_gerar_dados(session, engine):
     
     limpar_tela()
     if escolha_teste == '1':
-        _gerar_apenas_navios()
+        _gerar_apenas_navios(session)
     elif escolha_teste == '2':
         _resetar_banco(session, engine)
     elif escolha_teste == '0':
@@ -245,10 +273,61 @@ def menu_gerar_dados(session, engine):
     else:
         print(MSG_OPCAO_INVALIDA)
 
+def menu_gerenciar_navios(session):
+    print("\n--- GERENCIAR REGISTROS DE NAVIOS ---")
+    print("[1] Novo Registro Manual (Balcão)")
+    print("[2] Editar Dados de um Navio Existente")
+    print(MSG_CANCELAR)
+    
+    escolha = input(MSG_ESCOLHA_OPCAO).strip()
+    limpar_tela()
+    
+    if escolha == '1':
+        coletar_dados_cadastro(session)
+    elif escolha == '2':
+        editar_navio(session)
+    elif escolha == '0':
+        print(MSG_OPERACAO_CANCELADA)
+    else:
+        print(MSG_OPCAO_INVALIDA)
+
+def _selecionar_ou_pesquisar_navio(session):
+    """
+    Exibe os navios e permite selecionar pelo número da lista 
+    ou pesquisando os 7 dígitos do IMO diretamente.
+    """
+    todos_navios = session.query(Navio).all()
+    if not todos_navios:
+        print("Não há navios registrados no sistema.")
+        return None
+
+    for i, navio in enumerate(todos_navios, start=1):
+        print(f"[{i}] {navio.nome} (IMO: {navio.imo_id}) - Status: {navio.status.value}")
+    print(MSG_CANCELAR)
+    
+    entrada = input("\nEscolha o número da lista ou digite o IMO (7 dígitos): ").strip().upper()
+    
+    if entrada == '0':
+        return "CANCELADO"
+        
+    # 1. Tenta interpretar como um índice numérico da lista
+    if entrada.isdigit() and 1 <= int(entrada) <= len(todos_navios):
+        return todos_navios[int(entrada) - 1]
+        
+    # 2. Se não for índice, tenta como pesquisa direta de IMO
+    imo_busca = entrada if entrada.startswith("IMO") else f"IMO{entrada}"
+    navio_encontrado = session.query(Navio).filter(Navio.imo_id == imo_busca).first()
+    
+    if navio_encontrado:
+        return navio_encontrado
+        
+    print(MSG_ERRO_OPCAO_INVALIDA)
+    return None
+
 def painel_admin(session, engine):
     while True:
         print("\n--- PAINEL DO ADMINISTRADOR ---")
-        print("[1] Registrar Navio Manualmente (Balcão)")
+        print("[1] Gerenciar Registros (Novo / Editar existentes)")
         print("[2] Auditar Solicitações Pendentes")
         print("[3] Ver Fila de Atracação")
         print("[4] Iniciar Próxima Atracação")
@@ -262,7 +341,7 @@ def painel_admin(session, engine):
         op_admin = input(MSG_ESCOLHA_OPCAO).strip()
         limpar_tela()
 
-        if op_admin == '1':   coletar_dados_cadastro(session)
+        if op_admin == '1':   menu_gerenciar_navios(session)
         elif op_admin == '2': auditar_solicitacoes_pendentes(session)
         elif op_admin == '3': exibir_fila_atracacao(session)
         elif op_admin == '4': iniciar_atracacao(session)

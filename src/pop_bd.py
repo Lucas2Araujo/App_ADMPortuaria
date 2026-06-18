@@ -1,8 +1,10 @@
 from faker import Faker
-import random
+import secrets
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from cad import Base, Navio, Carga, StatusNavio, Vaga, StatusVaga
+
+gerar_random = secrets.SystemRandom()
 
 ENGINE = create_engine("sqlite:///porto.db")
 Base.metadata.create_all(ENGINE)
@@ -28,49 +30,48 @@ MAPA_CARGAS = {
     'RTX 5090': 'COMUM'
 }
 
-def gerar_navios_fake(quantidade=10):
+def gerar_navios_fake(session, quantidade=10):
     """Gera instâncias de Navio com dados aleatórios e as salva no banco"""
-    with Session(ENGINE) as session:
-        print(f"Gerando e inserindo {quantidade} navios no banco de dados...")
+    print(f"Gerando e inserindo {quantidade} navios no banco de dados...")
         
-        for _ in range(quantidade):
-            novo_navio = Navio(
-                imo_id = f"IMO{fake.unique.random_number(digits=7, fix_len=True)}",
-                nome = fake.first_name().upper() + " " + fake.last_name().upper(),
-                nome_capitao = fake.name(),
-                companhia = fake.company(),
-                status = random.choice([StatusNavio.PENDENTE, StatusNavio.VALIDADO])
-            )
-            
-            num_cargas = random.randint(5, 10)
-            total_toneladas = 0
-            produtos_disponiveis = list(MAPA_CARGAS.keys())
-            
-            for _ in range(num_cargas):
-                if total_toneladas >= 80:
-                    break
-                    
-                toneladas = random.randint(1, 15)
-                if total_toneladas + toneladas > 80:
-                    toneladas = 80 - total_toneladas
-                    
-                descricao = random.choice(produtos_disponiveis)
-                categoria = MAPA_CARGAS[descricao]
-                eh_perecivel = categoria in ['URGENTE_PERECIVEL', 'ALTA_PERECIBILIDADE', 'BAIXA_PERECIBILIDADE']
-                nova_carga = Carga(
-                    descricao=descricao,
-                    categoria=categoria,
-                    quantidade_toneladas=toneladas,
-                    eh_perecivel=eh_perecivel,
-                    documento_alfandega=random.choice([True, True, True, False])
-                )
-                novo_navio.cargas.append(nova_carga)
-                total_toneladas += toneladas
+    for _ in range(quantidade):
+        novo_navio = Navio(
+            imo_id = f"IMO{fake.unique.random_number(digits=7, fix_len=True)}",
+            nome = fake.first_name().upper() + " " + fake.last_name().upper(),
+            nome_capitao = fake.name(),
+            companhia = fake.company(),
+            status = gerar_random.choice([StatusNavio.PENDENTE, StatusNavio.VALIDADO])
+        )
+        
+        num_cargas = gerar_random.randint(5, 10)
+        total_toneladas = 0
+        produtos_disponiveis = list(MAPA_CARGAS.keys())
+        
+        for _ in range(num_cargas):
+            if total_toneladas >= 80:
+                break
                 
-            session.add(novo_navio)
-        
-        session.commit()
-        print("Sucesso: Dados persistidos!")
+            toneladas = gerar_random.randint(1, 15)
+            if total_toneladas + toneladas > 80:
+                toneladas = 80 - total_toneladas
+                
+            descricao = gerar_random.choice(produtos_disponiveis)
+            categoria = MAPA_CARGAS[descricao]
+            eh_perecivel = categoria in ['URGENTE_PERECIVEL', 'ALTA_PERECIBILIDADE', 'BAIXA_PERECIBILIDADE']
+            nova_carga = Carga(
+                descricao=descricao,
+                categoria=categoria,
+                quantidade_toneladas=toneladas,
+                eh_perecivel=eh_perecivel,
+                documento_alfandega=gerar_random.choice([True, True, True, False])
+            )
+            novo_navio.cargas.append(nova_carga)
+            total_toneladas += toneladas
+            
+        session.add(novo_navio)
+
+    session.commit()
+    print("Sucesso: Dados persistidos!")
 
 def verificar_integridade():
     """Consulta o banco de dados paraverificar se os dados foram inseridos corretamente"""

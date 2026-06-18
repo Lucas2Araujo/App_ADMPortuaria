@@ -8,9 +8,9 @@ from datetime import datetime
 from cad import Vaga, Atracacao, StatusVaga, StatusNavio, Navio
 from ord_propriety import obter_proximo_da_fila
 
-COR_VERDE = "\033[92m"
-COR_VERMELHA = "\033[91m"
-RESET = "\033[0m"
+cor_verde = "\033[92m"
+cor_vermelha = "\033[91m"
+reset = "\033[0m"
 
 def atracar_navio(session):
     """
@@ -107,9 +107,9 @@ def _imprimir_detalhe_vaga(vaga, mapa_atracacoes, mapa_navios, COR_VERDE, COR_VE
         vaga (Vaga): Objeto da vaga a ser exibida.
         mapa_atracacoes (dict): Dicionário mapeando ID da vaga para o objeto Atracacao ativa.
         mapa_navios (dict): Dicionário mapeando IMO do navio para o objeto Navio.
-        COR_VERDE (str): Código ANSI para cor verde.
-        COR_VERMELHA (str): Código ANSI para cor vermelha.
-        RESET (str): Código ANSI para resetar a cor do terminal.
+        cor_verde (str): Código ANSI para cor verde.
+        cor_vermelha (str): Código ANSI para cor vermelha.
+        reset(str): Código ANSI para resetar a cor do terminal.
     """
     if vaga.status != StatusVaga.OCUPADA:
         print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {COR_VERDE}[LIVRE]{RESET}")
@@ -199,8 +199,8 @@ def exibir_log_operacoes(session):
         op_id = ev['id']
         
         if ev['tipo'] == 'ATRACAO':
-            evento_str = f"{COR_VERDE}{'[+] ATRACAÇÃO':<16}{RESET}"
+            evento_str = f"{cor_verde}{'[+] ATRACAÇÃO':<16}{reset}"
         else:
-            evento_str = f"{COR_VERMELHA}{'[-] DESATRACAÇÃO':<16}{RESET}"
+            evento_str = f"{cor_vermelha}{'[-] DESATRACAÇÃO':<16}{reset}"
             
         print(f"{data_str:<20} | {evento_str} | {imo:<15} | Vaga {vaga:<2} | OP-{op_id:03d}")
