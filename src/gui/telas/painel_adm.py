@@ -25,7 +25,7 @@ def obter_view(page: ft.Page):
         ft.DataColumn(ft.Text("Status")),
         ft.DataColumn(ft.Text("Navio Atracado")),
         ft.DataColumn(ft.Text("Tempo de atracação")),
-    ], 
+        ft.DataColumn(ft.Text("Ações"))    ], 
     rows=[]
     )
 
@@ -69,7 +69,7 @@ def obter_view(page: ft.Page):
                     btn_liberar = ft.IconButton(
                         icon=ft.Icons.NO_CRASH, icon_color=ft.Colors.RED,
                         disabled=(vaga.status == StatusVaga.LIVRE),
-                        on_click=lambda e, vid=vaga.id: liberar_vaga(v_id)
+                        on_click=lambda e, vid=vaga.id: liberar_vaga(vid)
                     )
                 
                     tabela_vagas.rows.append(
@@ -126,7 +126,7 @@ def obter_view(page: ft.Page):
                 ft.IconButton(ft.Icons.REFRESH, tooltip="Atualizar", on_click=carregar_dados)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Divider(),
-            ft.ListView(Controls=tabela_vagas, expand=True, spacing=10)
+            ft.ListView(controls=tabela_vagas, expand=True, spacing=10)
         ], expand=True)
     )
 
