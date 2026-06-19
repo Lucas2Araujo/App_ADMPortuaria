@@ -1,5 +1,7 @@
 SQLAlchemy
 Faker
 pyinstaller
+pytest
 mkdocs-material
 mkdocstrings[python]
+flet

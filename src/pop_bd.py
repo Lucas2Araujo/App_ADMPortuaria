@@ -128,8 +128,8 @@ if __name__ == "__main__":
             else:
                 with Session(ENGINE) as session:
                     gerar_vagas_iniciais(session, quantidade=qtd_vagas)
-                gerar_navios_fake(quantidade=qtd_navios)
-                verificar_integridade()
+                gerar_navios_fake(session, quantidade=qtd_navios)
+            verificar_integridade()
         except ValueError:
             print("Erro: Digite um número inteiro válido.")
     else:

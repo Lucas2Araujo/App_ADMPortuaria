@@ -2,6 +2,8 @@
 
 [![Documentação Ativa](https://img.shields.io/badge/Documentação-Ativa-blue?style=for-the-badge&logo=markdown)](https://lucas2araujo.github.io/App_ADMPortuaria/)
 
+[![SonarQube Cloud](https://sonarcloud.io/images/project_badges/sonarcloud-highlight.svg)](https://sonarcloud.io/summary/new_code?id=Lucas2Araujo_App_ADMPortuaria)
+
 > **Disciplina:** Projeto e Desenvolvimento de Software (PDS)  
 > **Professor:** Davi Viana dos Santos  
 > **Instituição:** Universidade Federal do Maranhão (UFMA) - BICT / Engenharia da Computação  

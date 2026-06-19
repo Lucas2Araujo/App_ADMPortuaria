@@ -148,7 +148,7 @@ def _atracar_lote(session):
         
         if not vaga_livre or not navio_fila:
             if atr_count == 0:
-                print(f"\nOperação não concluída, checar se há navios para atracar ou vagas livres.")
+                print("\nOperação não concluída, checar se há navios para atracar ou vagas livres.")
             else:
                 print(f"\nOperação em lote concluída. {atr_count} navio(s) atracado(s) com sucesso!")
             break
@@ -225,7 +225,7 @@ def _gerar_apenas_navios(session):
     try:
         qtd_navios = int(input("Quantidade de navios para gerar: "))
         if qtd_navios > 0:
-            gerar_navios_fake(quantidade=qtd_navios)
+            gerar_navios_fake(session, quantidade=qtd_navios)
         else:
             print("Erro: A quantidade deve ser maior que zero.")
     except ValueError:

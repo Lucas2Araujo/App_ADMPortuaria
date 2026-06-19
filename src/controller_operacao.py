@@ -98,7 +98,7 @@ def _imprimir_cabecalho_dashboard(total_vagas, vagas_livres, vagas_ocupadas):
     print(f"Total: {total_vagas} | Disponíveis: {vagas_livres} | Ocupadas: {vagas_ocupadas}")
     print("=" * 70)
 
-def _imprimir_detalhe_vaga(vaga, mapa_atracacoes, mapa_navios, COR_VERDE, COR_VERMELHA, RESET):
+def _imprimir_detalhe_vaga(vaga, mapa_atracacoes, mapa_navios, cor_verde, cor_vermelha, reset):
     """
     Imprime os detalhes de uma única vaga, indicando seu status e, se ocupada,
     o navio correspondente.
@@ -112,18 +112,18 @@ def _imprimir_detalhe_vaga(vaga, mapa_atracacoes, mapa_navios, COR_VERDE, COR_VE
         reset(str): Código ANSI para resetar a cor do terminal.
     """
     if vaga.status != StatusVaga.OCUPADA:
-        print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {COR_VERDE}[LIVRE]{RESET}")
+        print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {cor_verde}[LIVRE]{reset}")
         return
 
     atracacao = mapa_atracacoes.get(vaga.id)
     if not atracacao:
-        print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {COR_VERMELHA}[OCUPADA]{RESET} -> (Sem atracação ativa registrada)")
+        print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {cor_vermelha}[OCUPADA]{reset} -> (Sem atracação ativa registrada)")
         return
 
     navio = mapa_navios.get(atracacao.navio_imo_id)
     nome_navio = navio.nome if navio else "Desconhecido"
     data_inicio = atracacao.data_hora_inicio.strftime("%Y-%m-%d %H:%M:%S") if atracacao.data_hora_inicio else "N/A"
-    print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {COR_VERMELHA}[OCUPADA]{RESET} -> Navio: {nome_navio} (IMO: {navio.imo_id}) - Atracado desde: {data_inicio}")
+    print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {cor_vermelha}[OCUPADA]{reset} -> Navio: {nome_navio} (IMO: {navio.imo_id}) - Atracado desde: {data_inicio}")
 
 def exibir_painel_vagas(session):
     """
@@ -153,7 +153,7 @@ def exibir_painel_vagas(session):
     mapa_navios = {n.imo_id: n for n in navios}
 
     for vaga in vagas:
-        _imprimir_detalhe_vaga(vaga, mapa_atracacoes, mapa_navios, COR_VERDE, COR_VERMELHA, RESET)
+        _imprimir_detalhe_vaga(vaga, mapa_atracacoes, mapa_navios, cor_verde, cor_vermelha, reset)
 
 def exibir_log_operacoes(session):
     """
