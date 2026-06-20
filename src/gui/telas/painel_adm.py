@@ -1,6 +1,7 @@
 import flet as ft
 import os
 import sys
+from threading import Thread
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 
@@ -19,6 +20,8 @@ def obter_view(page: ft.Page):
     txt_fila = ft.Text("0", size=32, weight=ft.FontWeight.BOLD)
     txt_pendentes = ft.Text("0", size=32, weight=ft.FontWeight.BOLD)
 
+    loading_indicator = ft.ProgressRing(visible =False)
+    
     tabela_vagas = ft.DataTable( 
         columns=[
         ft.DataColumn(ft.Text("ID Vaga")),
@@ -28,6 +31,93 @@ def obter_view(page: ft.Page):
         ft.DataColumn(ft.Text("Ações"))    ], 
     rows=[]
     )
+
+    tabela_navios = ft.DataTable(
+        columns=[
+            ft.DataColumn(ft.Text("ID Navio")),
+            ft.DataColumn(ft.Text("Nome")),
+            ft.DataColumn(ft.Text("Capitão")),
+            ft.DataColumn(ft.Text("Companhia")),
+            ft.DataColumn(ft.Text("Status")),
+            ft.DataColumn(ft.Text("Ações")),
+        ],
+        rows=[]
+    )
+
+    navio_selecionado = None
+    edit_nome = ft.TextField(label="Nome do Navio", width=300)
+    edit_capitao = ft.TextField(label="Nome do Capitão", width=300)
+    edit_companhia = ft.TextField(label="Companhia", width=300)
+    edit_salvar_edicao = ft.ElevatedButton("Salvar Alterações", icon=ft.Icons.SAVE, on_click=lambda e: submit_edicao_navio())
+
+    secao_formulario_edicao =ft.Container(
+        visible=False,
+        padding=20,
+        border=ft.border.all(1, ft.Colors.BLUE),
+        border_radius=10,
+        content=ft.Column([
+            ft.Text("Editar Dados da Embarcação", size=20, weight=ft.FontWeight.BOLD),
+            ft.Row([edit_nome, edit_capitao, edit_companhia]),
+            ft.Row([btn_salvar_edicao, ft.TextButton("Cancelar", on_click=lambda e: fechar_edicao())])
+        ])
+    )
+
+    def fechar_edicao():
+        secao_formulario_edicao.visible = False
+        edit_nome.value = edit_capitao.value = edit_companhia.value = ""
+        page.update()   
+
+    def abrir_edicao_navio(navio):
+        nonlocal navio_selecionado
+        navio_selecionado = navio
+        edit_nome.value = navio.nome
+        edit_capitao.value = navio.nome_capitao if hasattr(navio, 'capitao') else getattr(navio, 'capitao', '')
+        edit_companhia.value = navio.companhia
+        secao_formulario_edicao.visible = True
+        page.update()
+
+    def submit_edicao_navio():
+        if not edit_nome.value or not edit_capitao.value or not edit_companhia.value:
+            page.snack_bar = ft.SnackBar(ft.Text("Preencha todos os campos obrigatórios!"), bgcolor=ft.Colors.RED)
+            page.snack_bar.open = True
+            page.update()
+            return
+        
+        btn_salvar_edicao.disabled = True
+        loading_indicator.visible = True
+        page.update()
+
+    def worer():
+        msg = ""
+        status = ft.Colors.RED
+        try:
+
+            with Session(engine) as session:
+                navio = session.query(Navio).filter(Navio.id == navio_selecionado.id).first()
+                if navio:
+                    navio.nome = edit_nome.value
+                    if hasattr(navio, 'nome_capitao'): navio.nome_capitao = edit_capitao.value
+                    else: navio.capitao = edit_capitao.value
+                    navio.companhia = edit_companhia.value
+                    session.commit()
+                    msg = f"Navio {navio.nome} atualizado com sucesso!"
+                    status = ft.Colors.GREEN
+                else:
+                    msg = "Navio não encontrado." 
+        except Exception as e:
+            msg = f"Erro ao atualizar navio: {e}"
+        finally:
+            def finalizar():
+               page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status)
+               page.snack_bar.open = True
+               btn_salvar_edicao.disabled = False
+               loading_indicator.visible = False
+               secao_formulario_edicao.visible = False
+               carregar_dados()
+               page.update()
+            page.call_later(finalizar)
+    Thread
+
 
     def liberar_vaga(vaga_id):
         try:
