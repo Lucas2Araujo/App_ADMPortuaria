@@ -1,6 +1,7 @@
 import flet as ft
 import os
 import sys
+import re
 from threading import Thread
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
@@ -8,7 +9,8 @@ from sqlalchemy import create_engine
 diretorio_src = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if diretorio_src not in sys.path: sys.path.append(diretorio_src)
 
-from cad import Vaga, StatusVaga, Navio, StatusNavio
+from datetime import datetime
+from cad import Vaga, StatusVaga, Navio, StatusNavio, Atracacao
 from controller_cadastros import solicitar_pre_cadastro 
 
 diretorio_raiz = os.path.abspath(os.path.join(diretorio_src, '..'))
@@ -48,13 +50,12 @@ def obter_view(page: ft.Page):
     edit_nome = ft.TextField(label="Nome do Navio", width=300)
     edit_capitao = ft.TextField(label="Nome do Capitão", width=300)
     edit_companhia = ft.TextField(label="Companhia", width=300)
-    edit_salvar_edicao = ft.ElevatedButton("Salvar Alterações", icon=ft.Icons.SAVE, on_click=lambda e: submit_edicao_navio())
-    btn_salvar_edicao = ft.ElevatedButton("Salvar Alterações", icon=ft.Icons.SAVE)
+    btn_salvar_edicao = ft.ElevatedButton("Salvar Alterações", icon=ft.Icons.SAVE, on_click=lambda e: submit_edicao_navio())
 
     secao_formulario_edicao =ft.Container(
         visible=False,
         padding=20,
-        border=ft.border.all(1, ft.Colors.BLUE),
+        border=ft.Border.all(1, ft.Colors.BLUE),
         border_radius=10,
         content=ft.Column([
             ft.Text("Editar Dados da Embarcação", size=20, weight=ft.FontWeight.BOLD),
@@ -88,37 +89,37 @@ def obter_view(page: ft.Page):
         loading_indicator.visible = True
         page.update()
 
-    def worer():
-        msg = ""
-        status = ft.Colors.RED
-        try:
+        def worer():
+            msg = ""
+            status = ft.Colors.RED
+            try:
 
-            with Session(engine) as session:
-                navio = session.query(Navio).filter(Navio.id == navio_selecionado.id).first()
-                if navio:
-                    navio.nome = edit_nome.value
-                    if hasattr(navio, 'nome_capitao'): navio.nome_capitao = edit_capitao.value
-                    else: navio.capitao = edit_capitao.value
-                    navio.companhia = edit_companhia.value
-                    session.commit()
-                    msg = f"Navio {navio.nome} atualizado com sucesso!"
-                    status = ft.Colors.GREEN
-                else:
-                    msg = "Navio não encontrado." 
-        except Exception as e:
-            msg = f"Erro ao atualizar navio: {e}"
-        finally:
-            def finalizar():
-               page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status)
-               page.snack_bar.open = True
-               btn_salvar_edicao.disabled = False
-               loading_indicator.visible = False
-               secao_formulario_edicao.visible = False
-               carregar_dados()
-               page.update()
-            page.call_later(finalizar)
+                with Session(engine) as session:
+                    navio = session.query(Navio).filter(Navio.imo_id == navio_selecionado.imo_id).first()
+                    if navio:
+                        navio.nome = edit_nome.value
+                        if hasattr(navio, 'nome_capitao'): navio.nome_capitao = edit_capitao.value
+                        else: navio.capitao = edit_capitao.value
+                        navio.companhia = edit_companhia.value
+                        session.commit()
+                        msg = f"Navio {navio.nome} atualizado com sucesso!"
+                        status = ft.Colors.GREEN
+                    else:
+                        msg = "Navio não encontrado." 
+            except Exception as e:
+                msg = f"Erro ao atualizar navio: {e}"
+            finally:
+                def finalizar():
+                   page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status)
+                   page.snack_bar.open = True
+                   btn_salvar_edicao.disabled = False
+                   loading_indicator.visible = False
+                   secao_formulario_edicao.visible = False
+                   carregar_dados()
+                   page.update()
+                finalizar()
 
-    Thread(target=worer).start()
+        Thread(target=worer).start()
 
     def liberar_vaga(vaga_id):
         try:
@@ -174,7 +175,7 @@ def obter_view(page: ft.Page):
                         ])
                     )
 
-                    navios = session.query(Navio).all()
+                navios = session.query(Navio).all()
                 tabela_navios.rows.clear()
                 for navio in navios:
                     capitao_nome = navio.nome_capitao if hasattr(navio, 'nome_capitao') else getattr(navio, 'capitao', 'N/A')
@@ -184,7 +185,7 @@ def obter_view(page: ft.Page):
                     )
                     tabela_navios.rows.append(
                         ft.DataRow(cells=[
-                            ft.DataCell(ft.Text(navio.imo)),
+                            ft.DataCell(ft.Text(navio.imo_id)),
                             ft.DataCell(ft.Text(navio.nome)),
                             ft.DataCell(ft.Text(capitao_nome)),
                             ft.DataCell(ft.Text(navio.companhia)),
@@ -254,11 +255,22 @@ def obter_view(page: ft.Page):
         ], expand=True)
     )
 
-    campo_imo = ft.TextField(label="Número IMO (ex: 1234567)", width=300)
+    campo_imo = ft.TextField(
+        label="Número IMO (ex: 1234567)", 
+        width=300,
+        max_length=7,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        input_filter=ft.NumbersOnlyInputFilter()
+    )
     campo_nome = ft.TextField(label="Nome do Navio", width=300)
     campo_capitao = ft.TextField(label="Nome do Capitão", width=300)
     campo_companhia = ft.TextField(label="Companhia", width=300)
-    campo_peso = ft.TextField(label="Peso Total (Toneladas)", width=200, keyboard_type=ft.KeyboardType.NUMBER)
+    campo_peso = ft.TextField(
+        label="Peso Total (Toneladas)", 
+        width=200, 
+        keyboard_type=ft.KeyboardType.NUMBER,
+        input_filter=ft.NumbersOnlyInputFilter()
+    )
     
     campo_categoria = ft.Dropdown(
         label="Categoria da Carga",
@@ -274,25 +286,91 @@ def obter_view(page: ft.Page):
     campo_docs = ft.Switch(label="Possui Documentos Alfandegários?", value=False)
 
     def salvar_navio(e):
-        if not campo_imo.value or not campo_nome.value or not campo_peso.value or not campo_categoria.value:
-            page.snack_bar = ft.SnackBar(ft.Text("Preencha todos os campos obrigatórios!"), bgcolor=ft.Colors.RED)
-            page.snack_bar.open = True
+        print("[DEBUG] salvar_navio foi chamado!")
+        # Limpa os erros visuais de tentativas anteriores
+        campo_imo.error_text = None
+        campo_nome.error_text = None
+        campo_capitao.error_text = None
+        campo_companhia.error_text = None
+        campo_peso.error_text = None
+        campo_categoria.error_text = None
+        
+        erros_encontrados = False
+
+        # Validação do IMO
+        imo_val = campo_imo.value.strip()
+        if not imo_val:
+            campo_imo.error_text = "O IMO é obrigatório."
+            erros_encontrados = True
+        elif not imo_val.isdigit() or len(imo_val) != 7:
+            campo_imo.error_text = "O IMO deve conter exatamente 7 números."
+            erros_encontrados = True
+
+        # Validação do Nome do Navio
+        nome_val = campo_nome.value.strip()
+        if not nome_val:
+            campo_nome.error_text = "O nome do navio é obrigatório."
+            erros_encontrados = True
+        elif not re.fullmatch(r"[A-Za-z0-9À-ÿ\s\-']+", nome_val):
+            campo_nome.error_text = "Contém caracteres inválidos."
+            erros_encontrados = True
+
+        # Validação do Capitão
+        capitao_val = campo_capitao.value.strip()
+        if not capitao_val:
+            campo_capitao.error_text = "O nome do capitão é obrigatório."
+            erros_encontrados = True
+        elif not re.fullmatch(r"[A-Za-z0-9À-ÿ\s\-']+", capitao_val):
+            campo_capitao.error_text = "Contém caracteres inválidos."
+            erros_encontrados = True
+
+        # Validação da Companhia
+        companhia_val = campo_companhia.value.strip()
+        if not companhia_val:
+            campo_companhia.error_text = "A companhia é obrigatória."
+            erros_encontrados = True
+        elif not re.fullmatch(r"[A-Za-z0-9À-ÿ\s\-']+", companhia_val):
+            campo_companhia.error_text = "Contém caracteres inválidos."
+            erros_encontrados = True
+
+        # Validação do Peso
+        peso_val = campo_peso.value.strip()
+        peso = 0
+        if not peso_val:
+            campo_peso.error_text = "O peso é obrigatório."
+            erros_encontrados = True
+        else:
+            try:
+                peso = int(peso_val)
+                if peso <= 0:
+                    campo_peso.error_text = "O peso deve ser maior que zero."
+                    erros_encontrados = True
+            except ValueError:
+                campo_peso.error_text = "Insira um número inteiro válido."
+                erros_encontrados = True
+
+        # Validação da Categoria
+        if not campo_categoria.value:
+            campo_categoria.error_text = "Selecione uma categoria de carga."
+            erros_encontrados = True
+
+        # Se houver qualquer erro de validação, atualiza a tela para mostrar os avisos e aborta
+        if erros_encontrados:
             page.update()
             return
 
-        imo_formatado = f"IMO{campo_imo.value}" if campo_imo.value.isdigit() else campo_imo.value
+        imo_formatado = f"IMO{imo_val}"
         
         try:
-            peso = int(campo_peso.value)
             eh_perecivel = campo_categoria.value in ["URGENTE_PERECIVEL", "ALTA_PERECIBILIDADE"]
 
             with Session(engine) as session:
                 solicitar_pre_cadastro(
                     session=session,
                     imo=imo_formatado,
-                    nome=campo_nome.value,
-                    capitao=campo_capitao.value,
-                    companhia=campo_companhia.value,
+                    nome=nome_val,
+                    capitao=capitao_val,
+                    companhia=companhia_val,
                     carga_desc=f"Carga: {campo_categoria.value}",
                     categoria=campo_categoria.value,
                     peso=peso,
@@ -300,7 +378,7 @@ def obter_view(page: ft.Page):
                     possui_documentos=campo_docs.value
                 )
             
-            page.snack_bar = ft.SnackBar(ft.Text(f"Sucesso! Navio {campo_nome.value} ({imo_formatado}) registrado e aguardando auditoria!"), bgcolor=ft.Colors.GREEN)
+            page.snack_bar = ft.SnackBar(ft.Text(f"Sucesso! Navio {nome_val} ({imo_formatado}) registrado e aguardando auditoria!"), bgcolor=ft.Colors.GREEN)
             page.snack_bar.open = True
             
             # Limpa os campos após salvar
