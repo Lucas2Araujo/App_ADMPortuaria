@@ -49,6 +49,7 @@ def obter_view(page: ft.Page):
     edit_capitao = ft.TextField(label="Nome do Capitão", width=300)
     edit_companhia = ft.TextField(label="Companhia", width=300)
     edit_salvar_edicao = ft.ElevatedButton("Salvar Alterações", icon=ft.Icons.SAVE, on_click=lambda e: submit_edicao_navio())
+    btn_salvar_edicao = ft.ElevatedButton("Salvar Alterações", icon=ft.Icons.SAVE)
 
     secao_formulario_edicao =ft.Container(
         visible=False,
@@ -116,8 +117,8 @@ def obter_view(page: ft.Page):
                carregar_dados()
                page.update()
             page.call_later(finalizar)
-    Thread
 
+    Thread(target=worer).start()
 
     def liberar_vaga(vaga_id):
         try:
@@ -172,6 +173,26 @@ def obter_view(page: ft.Page):
                             )
                         ])
                     )
+
+                    navios = session.query(Navio).all()
+                tabela_navios.rows.clear()
+                for navio in navios:
+                    capitao_nome = navio.nome_capitao if hasattr(navio, 'nome_capitao') else getattr(navio, 'capitao', 'N/A')
+                    btn_editar = ft.IconButton(
+                        icon=ft.Icons.EDIT, icon_color=ft.Colors.BLUE,
+                        on_click=lambda e, n=navio: abrir_edicao_navio(n)
+                    )
+                    tabela_navios.rows.append(
+                        ft.DataRow(cells=[
+                            ft.DataCell(ft.Text(navio.imo)),
+                            ft.DataCell(ft.Text(navio.nome)),
+                            ft.DataCell(ft.Text(capitao_nome)),
+                            ft.DataCell(ft.Text(navio.companhia)),
+                            ft.DataCell(ft.Text(navio.status.name if hasattr(navio.status, 'name') else str(navio.status))),
+                            ft.DataCell(btn_editar)
+                        ])
+                    )
+
                 
                 if e: page.update()
         except Exception as e:
@@ -217,6 +238,19 @@ def obter_view(page: ft.Page):
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Divider(),
             ft.ListView(controls=tabela_vagas, expand=True, spacing=10)
+        ], expand=True)
+    )
+
+    aba_lista_navios = ft.Container(
+        padding=20, 
+        visible=False,
+        content=ft.Column([
+            ft.Row([
+                ft.Text("Lista de Embarcações", size=24, weight=ft.FontWeight.BOLD),
+                ft.IconButton(ft.Icons.REFRESH, tooltip="Atualizar Lista", on_click=carregar_dados)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            ft.Divider(),
+            ft.ListView(controls=tabela_navios, expand=True, spacing=10),
         ], expand=True)
     )
 
