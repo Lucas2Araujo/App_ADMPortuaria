@@ -1,5 +1,5 @@
 site_name: App ADMPortuaria
-site_description: Documentação do Sistema de Administração Portuária
+site_description: Documentação do Sistema de Administração Portuária — AdminPort (Flet)
 site_author: Lucas & Equipe
 site_url: https://lucas2araujo.github.io/App_ADMPortuaria/
 
@@ -8,7 +8,9 @@ theme:
   features:
     - navigation.tabs
     - navigation.sections
+    - navigation.expand
     - toc.integrate
+    - content.code.copy
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -46,6 +48,12 @@ plugins:
 
 nav:
   - Início: index.md
+  - Interface Gráfica (GUI):
+    - Visão Geral: gui/index.md
+    - Painel do Administrador: gui/painel_adm.md
+    - Fila de Atracação: gui/fila_view.md
+    - Painel da Tripulação: gui/painel_tripulacao.md
+  - Testes Automatizados: testes.md
   - Material de Referência (Diagramas): diagramas.md
   - Requisitos do Projeto: requisitos.md
   - Referência da API (Backend):

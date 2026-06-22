@@ -1,0 +1,25 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Administrador do Porto" as Admin
+actor "Sistema da Alfândega" as Alfandega <<Sistema Externo>>
+
+rectangle "Módulo: Operações Portuárias" {
+  usecase "Gerenciar Fila de Atracação" as UC_Fila
+  usecase "Aplicar Prioridade (Perecíveis)" as UC_Prioridade
+  usecase "Registrar Atracação" as UC_Atracar
+  usecase "Registrar Saída (Desatracação)" as UC_Saida
+  usecase "Monitorar Status das Vagas" as UC_Monitorar
+  usecase "Validar Liberação Aduaneira" as UC_ValidarAlfandega
+}
+
+Admin --> UC_Fila
+Admin --> UC_Atracar
+Admin --> UC_Saida
+Admin --> UC_Monitorar
+
+Alfandega --> UC_ValidarAlfandega
+
+UC_Prioridade .up.> UC_Fila : <<extend>>
+@enduml
