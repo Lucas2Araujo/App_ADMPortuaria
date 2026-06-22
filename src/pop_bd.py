@@ -1,13 +1,13 @@
 from faker import Faker
 import secrets
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from cad import Base, Navio, Carga, StatusNavio, Vaga, StatusVaga
 
 gerar_random = secrets.SystemRandom()
 
-ENGINE = create_engine("sqlite:///porto.db")
-Base.metadata.create_all(ENGINE)
+_DB_PATH = Path(__file__).parent / "porto.db"
 
 fake = Faker("pt_BR")
 
@@ -79,10 +79,10 @@ def gerar_navios_fake(session, quantidade=10):
     print("Sucesso: Dados persistidos!")
 
 
-def verificar_integridade():
+def verificar_integridade(engine):
     """Consulta o banco de dados paraverificar se os dados foram inseridos corretamente"""
     print("\n--- Verificação de Integridade ---")
-    with Session(ENGINE) as session:
+    with Session(engine) as session:
         navios = session.query(Navio).all()
         total = len(navios)
         print(f"Total de navios no banco: {total}")
@@ -124,6 +124,7 @@ if __name__ == "__main__":
     confirm = input("Deseja continuar? (S/N): ").strip().upper()
 
     if confirm in ("S", "SIM", "Y", "YES"):
+        ENGINE = create_engine(f"sqlite:///{_DB_PATH}")
         Base.metadata.drop_all(ENGINE)
         Base.metadata.create_all(ENGINE)
         print("Banco de dados anterior removido.")
@@ -137,8 +138,8 @@ if __name__ == "__main__":
             else:
                 with Session(ENGINE) as session:
                     gerar_vagas_iniciais(session, quantidade=qtd_vagas)
-                gerar_navios_fake(session, quantidade=qtd_navios)
-            verificar_integridade()
+                    gerar_navios_fake(session, quantidade=qtd_navios)
+            verificar_integridade(ENGINE)
         except ValueError:
             print("Erro: Digite um número inteiro válido.")
     else:
