@@ -39,7 +39,10 @@ extra_css:
   - stylesheets/extra.css
 
 plugins:
-  - search
+  - search:
+      lang:
+        - pt
+        - en
   - glightbox
   - mkdocstrings:
       handlers:

@@ -31,7 +31,7 @@ jobs:
 
       - name: 🧪 Executar Testes Automatizados (Pytest)
         run: |
-          xvfb-run pytest src/test_app.py src/tester_ord.py src/test_gui.py \
+          xvfb-run pytest src/test_app.py src/test_ord_propriety.py src/test_gui.py \
             --cov=src --cov=src/gui \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \

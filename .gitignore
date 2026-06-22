@@ -1,2 +1,30 @@
-__pycache__
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Ambientes virtuais
+.venv/
+venv/
+
+# Banco de dados SQLite
+*.db
+
+# Testes e cobertura
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Compilação (PyInstaller)
+dist/
+build/
+*.spec
+
+# MkDocs (site gerado automaticamente)
+site/
+
+# IDEs e ferramentas locais
+.vscode/
+.idea/
 .cz.toml

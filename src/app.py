@@ -1,5 +1,6 @@
 import os
 import re
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from cad import Base, Atracacao, Navio, Vaga, StatusVaga, StatusNavio
@@ -102,10 +103,10 @@ def _obter_carga():
         opcao = input("Selecione o tipo de carga (1-10): ").strip()
         if opcao in menu_cargas:
             desc_padrao, categoria, eh_perecivel = menu_cargas[opcao]
-            if opcao == "10":
+            if opcao == "0":
                 return _obter_descricao_personalizada(), categoria, eh_perecivel
             return desc_padrao, categoria, eh_perecivel
-        print("Erro: Opção inválida. Escolha um número de 1 a 10.")
+        print("Erro: Opção inválida. Escolha um número de 1 a 10 ou 0.")
 
 
 def _obter_peso():
@@ -446,7 +447,8 @@ def painel_admin(session, engine):
 
 def main():
     """Inicializa a aplicação e apresenta o menu principal de navegação do sistema."""
-    engine = create_engine("sqlite:///porto.db")
+    db_path = Path(__file__).parent / "porto.db"
+    engine = create_engine(f"sqlite:///{db_path}")
     Base.metadata.create_all(engine)
 
     with Session(engine) as session:
