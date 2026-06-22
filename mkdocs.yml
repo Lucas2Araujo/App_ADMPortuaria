@@ -1,0 +1,66 @@
+site_name: App ADMPortuaria
+site_description: Documentação do Sistema de Administração Portuária — AdminPort (Flet)
+site_author: Lucas & Equipe
+site_url: https://lucas2araujo.github.io/App_ADMPortuaria/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - toc.integrate
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Mudar para modo noturno (Padrão)
+
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Mudar para modo AMOLED (Preto Absoluto)
+
+    - scheme: amoled
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-3
+        name: Mudar para modo dia (Claro)
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search:
+      lang:
+        - pt
+        - en
+  - glightbox
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+
+nav:
+  - Início: index.md
+  - Interface Gráfica (GUI):
+    - Visão Geral: gui/index.md
+    - Painel do Administrador: gui/painel_adm.md
+    - Fila de Atracação: gui/fila_view.md
+    - Painel da Tripulação: gui/painel_tripulacao.md
+  - Testes Automatizados: testes.md
+  - Material de Referência (Diagramas): diagramas.md
+  - Requisitos do Projeto: requisitos.md
+  - Referência da API (Backend):
+    - Banco de Dados (Models): api/cad.md
+    - Controladores de Cadastro: api/cadastros.md
+    - Controladores de Operação: api/operacoes.md
+    - Fila de Atracação: api/ord_propriety.md

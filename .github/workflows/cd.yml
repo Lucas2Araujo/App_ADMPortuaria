@@ -1,0 +1,96 @@
+name: Compilar Executáveis e Criar Nova Release (CD)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag da Versão (ex: v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      release_title:
+        description: 'Título da Release (ex: Sprint 1 - Versão Final)'
+        required: true
+        default: 'Sprint 2 - Versão Final'
+
+jobs:
+  build:
+    name: Compilar Executáveis
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: Adm_Porto
+          - os: windows-latest
+            artifact_name: Adm_Porto.exe
+
+    steps:
+      - name: 📥 Clonar o Repositório
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 Instalar Dependências e PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r src/requirements.txt
+          pip install pyinstaller
+
+      - name: 🔨 Compilar com PyInstaller
+        run: pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
+
+      - name: 📤 Guardar Binário Temporariamente
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.artifact_name }}
+
+  create_release:
+    name: Criar Release Oficial e Analisar Segurança
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Clonar o Repositório
+        uses: actions/checkout@v4 # Necessário clonar de novo neste job para o comando "gh release" ter o contexto do git local
+
+      - name: 📥 Baixar Binários Compilados
+        uses: actions/download-artifact@v4
+        with:
+          path: binarios_temp/
+
+      - name: 🔐 Gerar Hashes SHA-256 e Organizar Arquivos
+        run: |
+          mkdir arquivos_finais
+          mv binarios_temp/Adm_Porto/Adm_Porto arquivos_finais/
+          mv binarios_temp/Adm_Porto.exe/Adm_Porto.exe arquivos_finais/
+          
+          cd arquivos_finais
+          sha256sum Adm_Porto Adm_Porto.exe > checksums_oficiais.txt
+
+      - name: 🛡️ VirusTotal GitHub Action
+        uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2
+        with:
+          vt_api_key: ${{ secrets.VT_API_KEY }}
+          files: |
+            arquivos_finais/Adm_Porto
+            arquivos_finais/Adm_Porto.exe
+
+      - name: 🚀 Criar Nova Release e Fazer Upload dos Arquivos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd arquivos_finais
+          gh release create "${{ github.event.inputs.tag_name }}" \
+            Adm_Porto \
+            Adm_Porto.exe \
+            checksums_oficiais.txt \
+            --title "${{ github.event.inputs.release_title }}" \
+            --notes "Release gerada de forma automatizada via GitHub Actions. Os executáveis foram empacotados, verificados criptograficamente e analisados via VirusTotal." \
+            --repo ${{ github.repository }}
