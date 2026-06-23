@@ -9,9 +9,7 @@ import re
 import os
 import sys
 import flet as ft
-from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
-
+from cad import obter_sessao
 # Ajuste de sys.path idêntico ao painel_adm.py para resolver imports do src/
 diretorio_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if diretorio_src not in sys.path:
@@ -20,9 +18,6 @@ if diretorio_src not in sys.path:
 from controller_cadastros import solicitar_pre_cadastro
 from telas.painel_adm import validar_formulario_navio
 
-# Engine compartilhado — mesmo padrão do painel_adm.py
-db_path = os.path.join(diretorio_src, "porto.db")
-engine = create_engine(f"sqlite:///{db_path}")
 
 
 def obter_view(page: ft.Page):
@@ -125,7 +120,7 @@ def obter_view(page: ft.Page):
                 "URGENTE_PERECIVEL",
                 "ALTA_PERECIBILIDADE",
             ]
-            with Session(engine) as session:
+            with obter_sessao() as session:
                 solicitar_pre_cadastro(
                     session=session,
                     imo=imo_formatado,

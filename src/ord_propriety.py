@@ -130,45 +130,22 @@ def obter_proximo_da_fila(session):
     )
 
 
-def exibir_fila_atracacao(session):
+def obter_fila_atracacao_dto(session) -> list:
     """
-    Exibe a fila de atracação atual no terminal, ordenada por prioridade (score).
-    Mostra navios com status VALIDADO e calcula o tempo de espera.
-
-    Args:
-        session (Session): Conexão aberta com o banco de dados.
+    Obtém a lista ordenada de navios na fila (status VALIDADO) como DTOs.
     """
     agora = datetime.now()
     sq = criar_subquery_score_cargas()
     score_total = obter_expressao_score_total(sq, agora)
 
-    # Solicitamos ao SQLAlchemy que traga uma Tupla: (Objeto Navio, Valor Numérico do Score Calculado)
     resultados = (
         session.query(Navio, score_total.label("score"))
+        .options(joinedload(Navio.cargas))
         .outerjoin(sq, Navio.imo_id == sq.c.navio_imo_id)
         .filter(Navio.status == StatusNavio.VALIDADO)
         .order_by(score_total.desc())
         .all()
     )
 
-    if not resultados:
-        print(
-            "Aviso: A fila de atracação está vazia no momento (Nenhum navio VALIDADO)."
-        )
-        return
+    return [navio.to_dto(score=float(score)) for navio, score in resultados]
 
-    print(
-        f"\n{'POS':<4} | {'IMO':<12} | {'NOME DA EMBARCAÇÃO':<30} | {'COMPANHIA':<25} | {'SCORE':<12} | {'ESPERA'}"
-    )
-    print("-" * 110)
-
-    for pos, (navio, score) in enumerate(resultados, start=1):
-        if navio.data_solicitacao:
-            espera = agora - navio.data_solicitacao
-            espera_str = str(espera).split(".")[0]
-        else:
-            espera_str = "N/A"
-
-        print(
-            f"{pos:<4} | {navio.imo_id:<12} | {navio.nome:<30} | {navio.companhia[:25]:<25} | {score:<12.2f} | {espera_str}"
-        )

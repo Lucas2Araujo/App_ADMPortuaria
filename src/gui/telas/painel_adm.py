@@ -5,18 +5,21 @@ import re
 
 from datetime import datetime, timedelta
 from threading import Thread
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import create_engine, func
+from cad import obter_sessao, StatusVaga, StatusNavio, Vaga, Navio, Atracacao
+from controller_cadastros import (
+    solicitar_pre_cadastro,
+    auditar_solicitacoes_pendentes,
+    excluir_registro_navio,
+    editar_registro_navio,
+)
+from controller_operacao import (
+    atracar_navio,
+    registrar_desatracacao,
+    obter_painel_vagas_dto,
+    obter_log_operacoes_dto,
+)
+from ord_propriety import obter_fila_atracacao_dto
 
-diretorio_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if diretorio_src not in sys.path:
-    sys.path.append(diretorio_src)
-
-from cad import Vaga, StatusVaga, Navio, StatusNavio, Atracacao, Carga
-from controller_cadastros import solicitar_pre_cadastro
-
-db_path = os.path.join(diretorio_src, "porto.db")
-engine = create_engine(f"sqlite:///{db_path}")
 
 
 def validar_formulario_navio(
@@ -116,20 +119,12 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
     def carregar_solicitacoes_pendentes(sync=False):
         def run_load():
             try:
-                with Session(engine) as session:
-                    pendentes = (
-                        session.query(Navio)
-                        .options(joinedload(Navio.cargas))
-                        .filter(Navio.status == StatusNavio.PENDENTE)
-                        .all()
-                    )
+                from controller_cadastros import obter_solicitacoes_pendentes_dto
+                with obter_sessao() as session:
+                    pendentes = obter_solicitacoes_pendentes_dto(session)
                     novas_linhas = []
                     for navio in pendentes:
-                        capitao_nome = (
-                            navio.nome_capitao
-                            if hasattr(navio, "nome_capitao")
-                            else getattr(navio, "capitao", "N/A")
-                        )
+                        capitao_nome = navio.nome_capitao
                         carga_txt = (
                             ", ".join(c.descricao for c in navio.cargas)
                             if navio.cargas
@@ -160,10 +155,28 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
                             ft.DataRow(
                                 cells=[
                                     ft.DataCell(ft.Text(navio.imo_id)),
-                                    ft.DataCell(ft.Text(navio.nome)),
-                                    ft.DataCell(ft.Text(capitao_nome)),
-                                    ft.DataCell(ft.Text(carga_txt)),
-                                    ft.DataCell(ft.Text(docs_txt)),
+                                    ft.DataCell(
+                                        ft.Container(
+                                            content=ft.Text(navio.nome, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+                                            width=150,
+                                            tooltip=navio.nome
+                                        )
+                                    ),
+                                    ft.DataCell(
+                                        ft.Container(
+                                            content=ft.Text(capitao_nome, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+                                            width=130,
+                                            tooltip=capitao_nome
+                                        )
+                                    ),
+                                    ft.DataCell(
+                                        ft.Container(
+                                            content=ft.Text(carga_txt, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+                                            width=250,
+                                            tooltip=carga_txt
+                                        )
+                                    ),
+                                    ft.DataCell(ft.Text(docs_txt, no_wrap=True)),
                                     ft.DataCell(
                                         ft.Row([btn_aprovar, btn_rejeitar], spacing=5)
                                     ),
@@ -190,36 +203,18 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
             msg = ""
             status_cor = ft.Colors.RED
             try:
-                with Session(engine) as session:
-                    navio = (
-                        session.query(Navio)
-                        .options(joinedload(Navio.cargas))
-                        .filter(Navio.imo_id == imo_em_auditoria)
-                        .first()
-                    )
-                    if navio:
-                        if acao_em_auditoria == "APROVAR":
-                            # Regra de negócio do CLI: rejeitar automaticamente se documentação incompleta
-                            docs_incompletos = any(
-                                not c.documento_alfandega for c in navio.cargas
-                            )
-                            if docs_incompletos:
-                                navio.status = StatusNavio.REJEITADO
-                                msg = f"Navio {navio.nome} REJEITADO automaticamente — documentação alfandegária incompleta."
-                                status_cor = ft.Colors.ORANGE
-                            else:
-                                navio.status = StatusNavio.VALIDADO
-                                msg = f"Navio {navio.nome} APROVADO!"
-                                status_cor = ft.Colors.GREEN
-                        elif acao_em_auditoria == "REJEITAR":
-                            navio.status = StatusNavio.REJEITADO
-                            msg = f"Solicitação do Navio {navio.nome} REJEITADA!"
-                            status_cor = ft.Colors.ORANGE
-                        session.commit()
+                from controller_cadastros import auditar_navio_individual
+                with obter_sessao() as session:
+                    navio_dto = auditar_navio_individual(session, imo_em_auditoria, acao_em_auditoria)
+                    if navio_dto.status == "VALIDADO":
+                        msg = f"Navio {navio_dto.nome} APROVADO!"
+                        status_cor = ft.Colors.GREEN
+                    else:
+                        msg = f"Navio {navio_dto.nome} REJEITADO — documentação alfandegária incompleta."
+                        status_cor = ft.Colors.ORANGE
             except Exception as err:
                 msg = f"Erro: {err}"
             finally:
-
                 def finalizar():
                     page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status_cor)
                     page.snack_bar.open = True
@@ -232,29 +227,13 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
 
     def auditar_todos_pendentes():
         """Aplica a auditoria automática do CLI: aprova quem tem docs completos, rejeita quem não tem."""
-
         def worker():
-            aprovados = 0
-            rejeitados = 0
             try:
-                with Session(engine) as session:
-                    pendentes = (
-                        session.query(Navio)
-                        .options(joinedload(Navio.cargas))
-                        .filter(Navio.status == StatusNavio.PENDENTE)
-                        .all()
-                    )
-                    for navio in pendentes:
-                        if any(not c.documento_alfandega for c in navio.cargas):
-                            navio.status = StatusNavio.REJEITADO
-                            rejeitados += 1
-                        else:
-                            navio.status = StatusNavio.VALIDADO
-                            aprovados += 1
-                    session.commit()
-            except Exception as err:
-                print(f"Erro na auditoria em lote: {err}")
-            finally:
+                from controller_cadastros import auditar_solicitacoes_pendentes
+                with obter_sessao() as session:
+                    auditos = auditar_solicitacoes_pendentes(session)
+                    aprovados = sum(1 for n in auditos if n.status == "VALIDADO")
+                    rejeitados = sum(1 for n in auditos if n.status == "REJEITADO")
 
                 def finalizar():
                     msg = f"Auditoria concluída: {aprovados} aprovado(s), {rejeitados} rejeitado(s) por documentação."
@@ -265,6 +244,8 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
                     carregar_dados()
 
                 finalizar()
+            except Exception as err:
+                print(f"Erro na auditoria em lote: {err}")
 
         Thread(target=worker).start()
 
@@ -307,9 +288,7 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
             msg = ""
             status_cor = ft.Colors.RED
             try:
-                with Session(engine) as session:
-                    from controller_operacao import atracar_navio
-
+                with obter_sessao() as session:
                     if tipo_atracacao == "PROXIMO":
                         sucesso = atracar_navio(session)
                         if sucesso:
@@ -325,7 +304,6 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
                         sucesso_count = 0
                         while atracar_navio(session):
                             sucesso_count += 1
-                        session.commit()
 
                         if sucesso_count > 0:
                             msg = f"Atracação em lote concluída! {sucesso_count} navio(s) atracado(s)."
@@ -333,11 +311,9 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
                         else:
                             msg = "Nenhum navio pôde ser atracado em lote."
                             status_cor = ft.Colors.ORANGE
-                    session.commit()
             except Exception as err:
                 msg = f"Erro na operação de atracação: {err}"
             finally:
-
                 def finalizar_ui():
                     loading_atracacao.visible = False
                     page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status_cor)
@@ -397,28 +373,19 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
             msg = ""
             status_cor = ft.Colors.RED
             try:
-                with Session(engine) as session:
-                    from controller_operacao import registrar_desatracacao
-
+                with obter_sessao() as session:
                     if tipo_desatracacao == "INDIVIDUAL":
-
                         registrar_desatracacao(session, imo_desatracacao)
                         msg = f"Navio {imo_desatracacao} desatracado com sucesso!"
                         status_cor = ft.Colors.GREEN
 
                     elif tipo_desatracacao == "MASSA":
-                        from cad import Atracacao
-
-                        atracacoes_ativas = (
-                            session.query(Atracacao)
-                            .filter(Atracacao.data_hora_fim.is_(None))
-                            .all()
-                        )
-
+                        vagas = obter_painel_vagas_dto(session)
                         sucesso_count = 0
-                        for atracacao in atracacoes_ativas:
-                            registrar_desatracacao(session, atracacao.navio_imo_id)
-                            sucesso_count += 1
+                        for vaga in vagas:
+                            if vaga.status == "OCUPADA" and vaga.navio_atracado:
+                                registrar_desatracacao(session, vaga.navio_atracado.imo_id)
+                                sucesso_count += 1
 
                         if sucesso_count > 0:
                             msg = f"Operação em massa concluída! {sucesso_count} navio(s) liberado(s)."
@@ -426,12 +393,9 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
                         else:
                             msg = "Nenhum navio atracado encontrado para liberar."
                             status_cor = ft.Colors.ORANGE
-
-                    session.commit()
             except Exception as err:
                 msg = f"Erro na operação de desatracação: {err}"
             finally:
-
                 def finalizar_ui():
                     loading_desatracacao.visible = False
                     page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status_cor)
@@ -488,22 +452,13 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
             msg = ""
             status_cor = ft.Colors.RED
             try:
-                with Session(engine) as session:
-                    navio = session.query(Navio).filter(Navio.imo_id == imo_para_excluir).first()
-                    if navio:
-                        if navio.status == StatusNavio.ATRACADO:
-                            msg = f"Erro: Não é possível excluir o navio '{navio.nome}' pois está atualmente ATRACADO."
-                            status_cor = ft.Colors.ORANGE
-                        else:
-                            nome_navio = navio.nome
-                            session.delete(navio)
-                            session.commit()
-                            msg = f"Sucesso: Registro do navio '{nome_navio}' ({imo_para_excluir}) foi excluído definitivamente."
-                            status_cor = ft.Colors.GREEN
-                    else:
-                        msg = f"Erro: Nenhum navio encontrado com o IMO '{imo_para_excluir}'."
+                with obter_sessao() as session:
+                    excluir_registro_navio(session, imo_para_excluir)
+                    msg = f"Sucesso: Registro do navio ({imo_para_excluir}) foi excluído definitivamente."
+                    status_cor = ft.Colors.GREEN
             except Exception as err:
-                msg = f"Erro ao excluir navio: {err}"
+                msg = f"{err}"
+                status_cor = ft.Colors.ORANGE
             finally:
                 def finalizar_ui():
                     page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status_cor)
@@ -657,28 +612,20 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
             msg = ""
             status = ft.Colors.RED
             try:
-                with Session(engine) as session:
-                    navio = (
-                        session.query(Navio)
-                        .filter(Navio.imo_id == navio_selecionado.imo_id)
-                        .first()
+                from controller_cadastros import editar_registro_navio
+                with obter_sessao() as session:
+                    editar_registro_navio(
+                        session,
+                        navio_selecionado.imo_id,
+                        edit_nome.value,
+                        edit_capitao.value,
+                        edit_companhia.value
                     )
-                    if navio:
-                        navio.nome = edit_nome.value
-                        if hasattr(navio, "nome_capitao"):
-                            navio.nome_capitao = edit_capitao.value
-                        else:
-                            navio.capitao = edit_capitao.value
-                        navio.companhia = edit_companhia.value
-                        session.commit()
-                        msg = f"Navio {navio.nome} atualizado com sucesso!"
-                        status = ft.Colors.GREEN
-                    else:
-                        msg = "Navio não encontrado."
+                    msg = f"Navio {edit_nome.value} atualizado com sucesso!"
+                    status = ft.Colors.GREEN
             except Exception as e:
                 msg = f"Erro ao atualizar navio: {e}"
             finally:
-
                 def finalizar():
                     page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status)
                     page.snack_bar.open = True
@@ -694,19 +641,14 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
 
     def liberar_vaga(vaga_id):
         try:
-            with Session(engine) as session:
-                vaga = session.query(Vaga).filter(Vaga.id == vaga_id).first()
-                if vaga and vaga.status == StatusVaga.OCUPADA:
-                    if hasattr(vaga, "navio") and vaga.navio:
-                        vaga.navio.status = StatusNavio.FINALIZADO
-                    vaga.status = StatusVaga.LIVRE
-                    vaga.navio_id = None
-                    session.commit()
-                    page.snack_bar = ft.SnackBar(
-                        ft.Text(f"Vaga {vaga_id} liberada!"), bgcolor=ft.Colors.GREEN
-                    )
-                    page.snack_bar.open = True
-                    carregar_dados()
+            from controller_operacao import liberar_vaga_individual
+            with obter_sessao() as session:
+                liberar_vaga_individual(session, vaga_id)
+                page.snack_bar = ft.SnackBar(
+                    ft.Text(f"Vaga {vaga_id} liberada!"), bgcolor=ft.Colors.GREEN
+                )
+                page.snack_bar.open = True
+                carregar_dados()
         except Exception as e:
             page.snack_bar = ft.SnackBar(
                 ft.Text(f"Erro ao liberar vaga: {e}"), bgcolor=ft.Colors.RED
@@ -716,318 +658,242 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
 
     def carregar_dados(e=None, sync=False):
         def worker():
-            session = Session(engine)
             try:
-                # 1. ATUALIZA OS 4 CARDS
-                total_vagas = session.query(Vaga).count()
-                vagas_ocupadas = (
-                    session.query(Vaga)
-                    .filter(Vaga.status == StatusVaga.OCUPADA)
-                    .count()
+                from controller_operacao import (
+                    obter_contadores_dashboard,
+                    obter_painel_vagas_dto,
+                    obter_log_operacoes_dto,
+                    obter_contagem_atracacoes_dia,
                 )
-                txt_vagas.value = f"{total_vagas - vagas_ocupadas} / {total_vagas}"
-                txt_fila.value = str(
-                    session.query(Navio)
-                    .filter(Navio.status == StatusNavio.VALIDADO)
-                    .count()
-                )
-                txt_pendentes.value = str(
-                    session.query(Navio)
-                    .filter(Navio.status == StatusNavio.PENDENTE)
-                    .count()
-                )
-                txt_concluidos.value = str(
-                    session.query(Navio)
-                    .filter(Navio.status == StatusNavio.FINALIZADO)
-                    .count()
-                )
+                from controller_cadastros import obter_todos_navios_dto
+                with obter_sessao() as session:
+                    # 1. ATUALIZA OS 4 CARDS
+                    counts = obter_contadores_dashboard(session)
+                    txt_vagas.value = f"{counts['vagas_livres']} / {counts['total_vagas']}"
+                    txt_fila.value = str(counts['total_validado'])
+                    txt_pendentes.value = str(counts['total_pendente'])
+                    txt_concluidos.value = str(counts['total_finalizado'])
 
-                # 2. ATUALIZA A CAIXA DOS PRÓXIMOS
-                query_proximos = session.query(Navio).filter(
-                    Navio.status == StatusNavio.VALIDADO
-                )
-                if hasattr(Navio, "score"):
-                    proximos = (
-                        query_proximos.order_by(Navio.score.desc()).limit(5).all()
-                    )
-                else:
-                    proximos = query_proximos.limit(5).all()
+                    # 2. ATUALIZA A CAIXA DOS PRÓXIMOS
+                    fila = obter_fila_atracacao_dto(session)
+                    proximos = fila[:5]
 
-                novos_proximos = []
-                if not proximos:
-                    novos_proximos.append(
-                        ft.Text("A fila está vazia no momento.", size=12, italic=True)
-                    )
-                else:
-                    for idx, p in enumerate(proximos):
+                    novos_proximos = []
+                    if not proximos:
                         novos_proximos.append(
-                            ft.Text(
-                                f"{idx+1}º - {p.nome}",
-                                size=12,
-                                weight=ft.FontWeight.W_500,
-                            )
-                        )
-                coluna_proximos.controls = novos_proximos
-
-                # 3. ATUALIZA A CAIXA DE VAGAS
-                todas_vagas = session.query(Vaga).all()
-                novas_vagas = []
-                for v in todas_vagas:
-                    if v.status == StatusVaga.LIVRE:
-                        novas_vagas.append(
-                            ft.Text(
-                                f"🟢 Berço {v.id}: Livre",
-                                size=12,
-                                color=ft.Colors.GREEN_700,
-                                weight=ft.FontWeight.BOLD,
-                            )
+                            ft.Text("A fila está vazia no momento.", size=12, italic=True)
                         )
                     else:
-                        novas_vagas.append(
-                            ft.Text(
-                                f"🔴 Berço {v.id}: Ocupado",
-                                size=12,
-                                color=ft.Colors.RED_700,
-                            )
-                        )
-                coluna_vagas.controls = novas_vagas
-
-                # 4. ATUALIZA O GRÁFICO DE ATRACAÇÕES DIÁRIAS
-                hoje_date = datetime.now().date()
-                contagem_por_dia = {}
-                try:
-                    resultados_grafico = (
-                        session.query(
-                            func.date(Atracacao.data_hora_inicio).label("dia"),
-                            func.count().label("total"),
-                        )
-                        .filter(
-                            func.date(Atracacao.data_hora_inicio)
-                            >= (hoje_date - timedelta(days=6)).isoformat()
-                        )
-                        .group_by(func.date(Atracacao.data_hora_inicio))
-                        .all()
-                    )
-                    contagem_por_dia = {
-                        row.dia: row.total for row in resultados_grafico
-                    }
-                except Exception:
-                    pass
-
-                pico = max(contagem_por_dia.values(), default=1) or 1
-                altura_max = 120
-                novo_grafico = []
-                for i in range(6, -1, -1):
-                    dia_iter = hoje_date - timedelta(days=i)
-                    dia_label = dia_iter.strftime("%d/%m")
-                    valor_dia = contagem_por_dia.get(dia_iter.isoformat(), 0)
-                    altura_barra = max(10, (valor_dia / pico) * altura_max)
-                    novo_grafico.append(
-                        ft.Column(
-                            [
+                        for idx, p in enumerate(proximos):
+                            novos_proximos.append(
                                 ft.Text(
-                                    str(valor_dia), size=13, weight=ft.FontWeight.BOLD
-                                ),
-                                ft.Container(
-                                    width=35,
-                                    height=altura_barra,
-                                    bgcolor=ft.Colors.BLUE_500,
-                                    border_radius=5,
-                                    tooltip=f"{valor_dia} atracações em {dia_label}",
-                                ),
-                                ft.Text(dia_label, size=11),
-                            ],
-                            alignment=ft.MainAxisAlignment.END,
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        )
-                    )
-                grafico_row.controls = novo_grafico
-
-                # 5. ATUALIZA O LOG DE ÚLTIMAS OPERAÇÕES (Otimizado com outerjoin)
-                resultados_log = (
-                    session.query(Atracacao, Navio.nome)
-                    .outerjoin(Navio, Atracacao.navio_imo_id == Navio.imo_id)
-                    .order_by(Atracacao.id.desc())
-                    .limit(5)
-                    .all()
-                )
-                novos_logs = []
-                if not resultados_log:
-                    novos_logs.append(
-                        ft.Text("Nenhuma operação registrada.", size=12, italic=True)
-                    )
-                else:
-                    eventos_log = []
-                    for op, navio_nome in resultados_log:
-                        nome_log = navio_nome if navio_nome else op.navio_imo_id
-                        eventos_log.append(
-                            {
-                                "tipo": "entrada",
-                                "data": op.data_hora_inicio,
-                                "nome": nome_log,
-                                "vaga": op.vaga_id,
-                            }
-                        )
-                        if op.data_hora_fim:
-                            eventos_log.append(
-                                {
-                                    "tipo": "saida",
-                                    "data": op.data_hora_fim,
-                                    "nome": nome_log,
-                                    "vaga": op.vaga_id,
-                                }
-                            )
-                    eventos_log.sort(key=lambda x: x["data"], reverse=True)
-                    for ev in eventos_log[:5]:
-                        hora_ev = ev["data"].strftime("%d/%m %H:%M")
-                        if ev["tipo"] == "saida":
-                            novos_logs.append(
-                                ft.Text(
-                                    f"⬅️ Saída: {ev['nome']} (Berço {ev['vaga']}) — {hora_ev}",
+                                    f"{idx+1}º - {p.nome}",
                                     size=12,
+                                    weight=ft.FontWeight.W_500,
+                                )
+                            )
+                    coluna_proximos.controls = novos_proximos
+
+                    # 3. ATUALIZA A CAIXA DE VAGAS
+                    vagas = obter_painel_vagas_dto(session)
+                    novas_vagas = []
+                    for v in vagas:
+                        if v.status == "LIVRE":
+                            novas_vagas.append(
+                                ft.Text(
+                                    f"🟢 Berço {v.id}: Livre",
+                                    size=12,
+                                    color=ft.Colors.GREEN_700,
+                                    weight=ft.FontWeight.BOLD,
                                 )
                             )
                         else:
-                            novos_logs.append(
+                            novas_vagas.append(
                                 ft.Text(
-                                    f"➡️ Entrada: {ev['nome']} (Berço {ev['vaga']}) — {hora_ev}",
+                                    f"🔴 Berço {v.id}: Ocupado",
                                     size=12,
+                                    color=ft.Colors.RED_700,
                                 )
                             )
-                coluna_logs.controls = novos_logs
+                    coluna_vagas.controls = novas_vagas
 
-                # 6. TABELAS DA ABA SECUNDÁRIA
-                atracacoes_ativas = (
-                    session.query(Atracacao)
-                    .filter(Atracacao.data_hora_fim.is_(None))
-                    .all()
-                )
-                mapa_atracacoes = {a.vaga_id: a for a in atracacoes_ativas}
+                    # 4. ATUALIZA O GRÁFICO DE ATRACAÇÕES DIÁRIAS
+                    hoje_date = datetime.now().date()
+                    contagem_por_dia = obter_contagem_atracacoes_dia(session, 7)
 
-                novas_linhas_vagas = []
-                # Otimização N+1: Buscar navios atracados de uma vez
-                imos_atracados = [a.navio_imo_id for a in atracacoes_ativas]
-                navios_atracados = (
-                    session.query(Navio)
-                    .filter(Navio.imo_id.in_(imos_atracados))
-                    .all()
-                ) if imos_atracados else []
-                mapa_navios_atracados = {n.imo_id: n for n in navios_atracados}
+                    pico = max(contagem_por_dia.values(), default=1) or 1
+                    altura_max = 120
+                    novo_grafico = []
+                    for i in range(6, -1, -1):
+                        dia_iter = hoje_date - timedelta(days=i)
+                        dia_label = dia_iter.strftime("%d/%m")
+                        valor_dia = contagem_por_dia.get(dia_iter.isoformat(), 0)
+                        altura_barra = max(10, (valor_dia / pico) * altura_max)
+                        novo_grafico.append(
+                            ft.Column(
+                                [
+                                    ft.Text(
+                                        str(valor_dia), size=13, weight=ft.FontWeight.BOLD
+                                    ),
+                                    ft.Container(
+                                        width=35,
+                                        height=altura_barra,
+                                        bgcolor=ft.Colors.BLUE_500,
+                                        border_radius=5,
+                                        tooltip=f"{valor_dia} atracações em {dia_label}",
+                                    ),
+                                    ft.Text(dia_label, size=11),
+                                ],
+                                alignment=ft.MainAxisAlignment.END,
+                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            )
+                        )
+                    grafico_row.controls = novo_grafico
 
-                for vaga in todas_vagas:
-                    atracacao_vaga = mapa_atracacoes.get(vaga.id)
-                    if atracacao_vaga:
-                        navio_atracado = mapa_navios_atracados.get(atracacao_vaga.navio_imo_id)
-                        navio_nome = (
-                            navio_atracado.nome
-                            if navio_atracado
-                            else atracacao_vaga.navio_imo_id
+                    # 5. ATUALIZA O LOG DE ÚLTIMAS OPERAÇÕES
+                    eventos_log = obter_log_operacoes_dto(session)[:5]
+                    novos_logs = []
+                    if not eventos_log:
+                        novos_logs.append(
+                            ft.Text("Nenhuma operação registrada.", size=12, italic=True)
                         )
-                        minutos = int(
-                            (
-                                datetime.now() - atracacao_vaga.data_hora_inicio
-                            ).total_seconds()
-                            / 60
-                        )
-                        tempo_txt = (
-                            f"{minutos} min"
-                            if minutos < 60
-                            else f"{minutos // 60}h {minutos % 60}min"
-                        )
-                        imo_btn = atracacao_vaga.navio_imo_id
                     else:
-                        navio_nome = "—"
-                        tempo_txt = "—"
-                        imo_btn = None
-
-                    status_cor = (
-                        ft.Colors.GREEN
-                        if vaga.status == StatusVaga.LIVRE
-                        else ft.Colors.RED
-                    )
-                    btn_liberar = ft.IconButton(
-                        icon=ft.Icons.NO_CRASH,
-                        icon_color=ft.Colors.RED,
-                        tooltip="Desatracar navio",
-                        disabled=(vaga.status == StatusVaga.LIVRE),
-                        on_click=lambda e, imo=imo_btn: (
-                            abrir_confirmacao_desatracacao("INDIVIDUAL", imo)
-                            if imo
-                            else None
-                        ),
-                    )
-                    novas_linhas_vagas.append(
-                        ft.DataRow(
-                            cells=[
-                                ft.DataCell(ft.Text(f"Berço {vaga.id}")),
-                                ft.DataCell(
+                        for ev in eventos_log:
+                            hora_ev = ev.data_hora.strftime("%d/%m %H:%M")
+                            if ev.tipo == "DESATRACAO":
+                                novos_logs.append(
                                     ft.Text(
-                                        vaga.status.name,
-                                        color=status_cor,
-                                        weight=ft.FontWeight.BOLD,
+                                        f"⬅️ Saída: {ev.navio_nome} (Berço {ev.vaga_id}) — {hora_ev}",
+                                        size=12,
                                     )
-                                ),
-                                ft.DataCell(ft.Text(navio_nome)),
-                                ft.DataCell(ft.Text(tempo_txt)),
-                                ft.DataCell(btn_liberar),
-                            ]
-                        )
-                    )
-                tabela_vagas.rows = novas_linhas_vagas
-
-                # Limita a 100 navios mais recentes na aba de gestão para evitar sobrecarga da UI
-                navios = (
-                    session.query(Navio)
-                    .order_by(Navio.data_solicitacao.desc())
-                    .limit(100)
-                    .all()
-                )
-                novas_linhas_navios = []
-                for navio in navios:
-                    capitao_nome = (
-                        navio.nome_capitao
-                        if hasattr(navio, "nome_capitao")
-                        else getattr(navio, "capitao", "N/A")
-                    )
-                    btn_editar = ft.IconButton(
-                        icon=ft.Icons.EDIT,
-                        icon_color=ft.Colors.BLUE,
-                        on_click=lambda e, n=navio: abrir_edicao_navio(n),
-                    )
-                    btn_excluir = ft.IconButton(
-                        icon=ft.Icons.DELETE,
-                        icon_color=ft.Colors.RED,
-                        on_click=lambda e, imo=navio.imo_id: abrir_confirmacao_exclusao(imo),
-                    )
-                    novas_linhas_navios.append(
-                        ft.DataRow(
-                            cells=[
-                                ft.DataCell(ft.Text(navio.imo_id)),
-                                ft.DataCell(ft.Text(navio.nome)),
-                                ft.DataCell(ft.Text(capitao_nome)),
-                                ft.DataCell(ft.Text(navio.companhia)),
-                                ft.DataCell(
+                                )
+                            else:
+                                novos_logs.append(
                                     ft.Text(
-                                        navio.status.name
-                                        if hasattr(navio.status, "name")
-                                        else str(navio.status)
+                                        f"➡️ Entrada: {ev.navio_nome} (Berço {ev.vaga_id}) — {hora_ev}",
+                                        size=12,
                                     )
-                                ),
-                                ft.DataCell(
-                                    ft.Row([btn_editar, btn_excluir], spacing=5)
-                                ),
-                            ]
-                        )
-                    )
-                # Correção do Bug de Indentação: tabela_navios.rows atualizado fora do loop
-                tabela_navios.rows = novas_linhas_navios
+                                )
+                    coluna_logs.controls = novos_logs
 
-                # Atualizar a interface independentemente de evento, pois a tabela de navios foi populada em background
-                page.update()
+                    # 6. TABELAS DA ABA SECUNDÁRIA
+                    novas_linhas_vagas = []
+                    for vaga in vagas:
+                        if vaga.status == "OCUPADA":
+                            navio_atracado = vaga.navio_atracado
+                            navio_nome = navio_atracado.nome if navio_atracado else "Desconhecido"
+                            minutos = int(
+                                (
+                                    datetime.now() - vaga.data_hora_inicio
+                                ).total_seconds()
+                                / 60
+                            )
+                            tempo_txt = (
+                                f"{minutos} min"
+                                if minutos < 60
+                                else f"{minutos // 60}h {minutos % 60}min"
+                            )
+                            imo_btn = navio_atracado.imo_id if navio_atracado else None
+                        else:
+                            navio_nome = "—"
+                            tempo_txt = "—"
+                            imo_btn = None
+
+                        status_cor = (
+                            ft.Colors.GREEN
+                            if vaga.status == "LIVRE"
+                            else ft.Colors.RED
+                        )
+                        btn_liberar = ft.IconButton(
+                            icon=ft.Icons.NO_CRASH,
+                            icon_color=ft.Colors.RED,
+                            tooltip="Desatracar navio",
+                            disabled=(vaga.status == "LIVRE"),
+                            on_click=lambda e, imo=imo_btn: (
+                                abrir_confirmacao_desatracacao("INDIVIDUAL", imo)
+                                if imo
+                                else None
+                            ),
+                        )
+                        novas_linhas_vagas.append(
+                            ft.DataRow(
+                                cells=[
+                                    ft.DataCell(ft.Text(f"Berço {vaga.id}")),
+                                    ft.DataCell(
+                                        ft.Text(
+                                            vaga.status,
+                                            color=status_cor,
+                                            weight=ft.FontWeight.BOLD,
+                                        )
+                                    ),
+                                    ft.DataCell(
+                                        ft.Container(
+                                            content=ft.Text(navio_nome, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+                                            width=180,
+                                            tooltip=navio_nome
+                                        )
+                                    ),
+                                    ft.DataCell(ft.Text(tempo_txt, no_wrap=True)),
+                                    ft.DataCell(btn_liberar),
+                                ]
+                            )
+                        )
+                    tabela_vagas.rows = novas_linhas_vagas
+
+                    # Limita a 100 navios mais recentes na aba de gestão para evitar sobrecarga da UI
+                    navios = obter_todos_navios_dto(session)
+                    navios.sort(key=lambda x: x.data_solicitacao, reverse=True)
+                    navios = navios[:100]
+
+                    novas_linhas_navios = []
+                    for navio in navios:
+                        capitao_nome = navio.nome_capitao
+                        btn_editar = ft.IconButton(
+                            icon=ft.Icons.EDIT,
+                            icon_color=ft.Colors.BLUE,
+                            on_click=lambda e, n=navio: abrir_edicao_navio(n),
+                        )
+                        btn_excluir = ft.IconButton(
+                            icon=ft.Icons.DELETE,
+                            icon_color=ft.Colors.RED,
+                            on_click=lambda e, imo=navio.imo_id: abrir_confirmacao_exclusao(imo),
+                        )
+                        novas_linhas_navios.append(
+                            ft.DataRow(
+                                cells=[
+                                    ft.DataCell(ft.Text(navio.imo_id)),
+                                    ft.DataCell(
+                                        ft.Container(
+                                            content=ft.Text(navio.nome, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+                                            width=150,
+                                            tooltip=navio.nome
+                                        )
+                                    ),
+                                    ft.DataCell(
+                                        ft.Container(
+                                            content=ft.Text(capitao_nome, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+                                            width=130,
+                                            tooltip=capitao_nome
+                                        )
+                                    ),
+                                    ft.DataCell(
+                                        ft.Container(
+                                            content=ft.Text(navio.companhia, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+                                            width=130,
+                                            tooltip=navio.companhia
+                                        )
+                                    ),
+                                    ft.DataCell(ft.Text(navio.status, no_wrap=True)),
+                                    ft.DataCell(
+                                        ft.Row([btn_editar, btn_excluir], spacing=5)
+                                    ),
+                                ]
+                            )
+                        )
+                    tabela_navios.rows = novas_linhas_navios
+                    page.update()
             except Exception as erro:
                 print(f"Erro ao carregar dados: {erro}")
-            finally:
-                session.close()
 
         if sync:
             worker()
@@ -1279,7 +1145,7 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
                 "URGENTE_PERECIVEL",
                 "ALTA_PERECIBILIDADE",
             ]
-            with Session(engine) as session:
+            with obter_sessao() as session:
                 solicitar_pre_cadastro(
                     session=session,
                     imo=imo_formatado,
@@ -1424,6 +1290,8 @@ def obter_view(page: ft.Page, aba_ativa="dashboard"):
         while True:
             time.sleep(2)
             if not aba_retornada.page:
+                break
+            if getattr(page, "active_tab", None) != aba_ativa:
                 break
             try:
                 carregar_dados(sync=False)

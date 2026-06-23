@@ -1,0 +1,73 @@
+name: Deploy Documentação (MkDocs)
+
+# Atualiza a documentação automaticamente a cada push na main.
+# IMPORTANTE: usa a mesma GitHub Pages API que o cd.yml, então
+# NÃO entra em conflito. O cd.yml (ao criar uma release) fará um
+# deploy completo que inclui a web app; este workflow só atualiza
+# a documentação em pushes normais de desenvolvimento.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Garante que apenas um deploy rode por vez; cancela runs anteriores
+# se um novo push chegar antes do fim.
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Gerar Diagramas e Publicar Docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: 📥 Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar o Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 Instalar dependências de Sistema (Java, Graphviz e PlantUML)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-jre graphviz plantuml
+
+      - name: 🖼️ Gerar Imagens PNG a partir dos .puml
+        run: |
+          DEST="$(pwd)/docs/Diagramas/Imagens"
+          mkdir -p "$DEST"
+
+          find "docs/Diagramas/Código dos diagramas" -name "*.puml" | while read -r puml_file; do
+            echo "Gerando PNG para: $puml_file"
+            plantuml -tpng -o "$DEST" "$puml_file"
+          done
+
+          echo "--- Imagens geradas em $DEST ---"
+          ls -la "$DEST"
+
+      - name: 📦 Instalar dependências do MkDocs
+        run: pip install mkdocs-material mkdocstrings[python] mkdocs-glightbox
+
+      - name: 🏗️ Construir site MkDocs
+        run: mkdocs build --site-dir site_final
+
+      - name: 📤 Enviar Artefato para o Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site_final
+
+      - name: 🚀 Deploy no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

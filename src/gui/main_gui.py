@@ -41,14 +41,9 @@ def main(page: ft.Page):
     def gerar_dados_bd(e):
         try:
             import pop_bd
-            from sqlalchemy import create_engine
-            from sqlalchemy.orm import Session
-            import os
+            from cad import obter_sessao
 
-            db_path = os.path.join(os.path.dirname(__file__), "..", "porto.db")
-            engine = create_engine(f"sqlite:///{db_path}")
-
-            with Session(engine) as session:
+            with obter_sessao() as session:
                 pop_bd.gerar_navios_fake(session, 60)
 
             page.snack_bar = ft.SnackBar(
@@ -89,6 +84,7 @@ def main(page: ft.Page):
 
     # Função central de navegação
     def navegar_para(target: str):
+        page.active_tab = target
         # Limpa os modais/popups anteriores da memória para evitar sobreposição e bugs visuais
         page.overlay.clear()
 
@@ -113,6 +109,7 @@ def main(page: ft.Page):
         page.update()
 
     # Inicializar conteúdo principal com a view do Dashboard
+    page.active_tab = "dashboard"
     conteudo_principal = ft.Container(
         content=view_dashboard(page, "dashboard"), expand=True
     )

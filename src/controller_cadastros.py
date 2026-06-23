@@ -8,6 +8,17 @@ de navios, classificação de cargas e processos de auditoria documental.
 from datetime import datetime
 from sqlalchemy.orm import joinedload
 from cad import Navio, Carga, StatusNavio
+from dto import NavioDTO
+
+
+class CargaNaoClassificadaError(Exception):
+    """Exceção levantada quando uma carga precisa ser classificada interativamente pela apresentação."""
+    def __init__(self, imo_id: str, navio_nome: str, carga_id: int, carga_descricao: str):
+        self.imo_id = imo_id
+        self.navio_nome = navio_nome
+        self.carga_id = carga_id
+        self.carga_descricao = carga_descricao
+        super().__init__(f"A carga '{carga_descricao}' (ID: {carga_id}) do navio {navio_nome} ({imo_id}) precisa de classificação.")
 
 
 def solicitar_pre_cadastro(
@@ -21,25 +32,9 @@ def solicitar_pre_cadastro(
     peso: int,
     eh_perecivel: bool,
     possui_documentos: bool,
-):
+) -> NavioDTO:
     """
-    Simula a ação do Capitão. Realiza o pré-cadastro de um navio informando
-    os dados da embarcação e o seu manifesto de carga.
-
-    Args:
-        session (Session): Sessão ativa do SQLAlchemy.
-        imo (str): O ID IMO único do navio.
-        nome (str): Nome do navio.
-        capitao (str): Nome do responsável pelo navio.
-        companhia (str): Empresa proprietária da frota.
-        carga_desc (str): Descrição do manifesto de carga.
-        categoria (str): Classificação predefinida da carga.
-        peso (int): Quantidade total em toneladas.
-        eh_perecivel (bool): Define se o multiplicador de perecibilidade será aplicado.
-        possui_documentos (bool): Define se a carga possui liberação alfandegária.
-
-    Returns:
-        Navio: O objeto `Navio` recém-cadastrado na base de dados com status `PENDENTE`.
+    Realiza o pré-cadastro de um navio informando os dados da embarcação e o seu manifesto de carga.
     """
     novo_navio = Navio(
         imo_id=imo,
@@ -62,70 +57,36 @@ def solicitar_pre_cadastro(
     session.add(novo_navio)
     session.commit()
 
-    print(
-        f"[CAPITÃO] Pré-cadastro realizado: Navio '{nome}' ({imo}) adicionado com status PENDENTE."
-    )
-    return novo_navio
+    return novo_navio.to_dto()
 
 
-def _solicitar_classificacao_carga(carga, nome_navio):
+def classificar_carga(session, carga_id: int, categoria: str, eh_perecivel: bool):
     """
-    Solicita interativamente a classificação de uma carga com categoria 'OUTROS_PENDENTE' no terminal.
-
-    Args:
-        carga (Carga): Objeto carga que não possui categoria definida (Outros).
-        nome_navio (str): Nome do navio, usado apenas para log no terminal.
+    Classifica uma carga específica com a categoria e perecibilidade fornecidas.
     """
-    print(
-        f"Atenção: O navio {nome_navio} possui uma carga não classificada: [{carga.descricao}]."
-    )
-    print(
-        "[1] Ultra Perecível | [2] Alta Perecibilidade | [3] Baixa Perecibilidade | [4] Comum"
-    )
-
-    opcoes = {
-        "1": ("URGENTE_PERECIVEL", True),
-        "2": ("ALTA_PERECIBILIDADE", True),
-        "3": ("BAIXA_PERECIBILIDADE", True),
-        "4": ("COMUM", False),
-    }
-
-    while True:
-        escolha = input("Classifique a carga (1-4): ").strip()
-        if escolha in opcoes:
-            carga.categoria, carga.eh_perecivel = opcoes[escolha]
-            break
-        print("Opção inválida. Tente novamente.")
+    carga = session.query(Carga).filter(Carga.id == carga_id).first()
+    if not carga:
+        raise ValueError("Carga não encontrada.")
+    carga.categoria = categoria
+    carga.eh_perecivel = eh_perecivel
+    session.commit()
 
 
 def _auditar_documentacao_navio(navio):
     """
     Audita e verifica a documentação de um navio.
-
-    Args:
-        navio (Navio): A instância do navio sendo analisada. Altera o status para `VALIDADO` se possuir documentos ou `REJEITADO` caso falte de alguma carga.
-        Após a auditoria, o navio é definido como `VALIDADO` (se todos os documentos estiverem ok) ou `REJEITADO` (se houver pendências).
     """
-    # Regra de Negócio: A ausência de documentação aduaneira de qualquer carga bloqueia a entrada do navio na fila de atracação.
     if any(not carga.documento_alfandega for carga in navio.cargas):
         navio.status = StatusNavio.REJEITADO
-        print(
-            f"[ADMIN] AVISO: Navio '{navio.nome}' ({navio.imo_id}) REJEITADO. Documentação da carga incompleta."
-        )
     else:
         navio.status = StatusNavio.VALIDADO
-        print(
-            f"[ADMIN] SUCESSO: Navio '{navio.nome}' ({navio.imo_id}) VALIDADO. Aprovado para entrar na Fila de Atracação."
-        )
 
 
-def auditar_solicitacoes_pendentes(session):
+def auditar_solicitacoes_pendentes(session) -> list[NavioDTO]:
     """
-    Simula a ação do Administrador do Porto auditando todos os navios PENDENTES.
+    Audita todos os navios PENDENTES.
     Altera o status para VALIDADO ou REJEITADO baseado na documentação aduaneira.
-
-    Args:
-        session (Session): Sessão ativa do SQLAlchemy conectada ao banco de dados.
+    Se encontrar cargas não classificadas, lança CargaNaoClassificadaError para ser resolvido na camada superior.
     """
     navios_pendentes = (
         session.query(Navio)
@@ -135,41 +96,104 @@ def auditar_solicitacoes_pendentes(session):
     )
 
     if not navios_pendentes:
-        print("[ADMIN] Não há solicitações pendentes para auditoria no momento.")
-        return
+        return []
 
+    auditos = []
     for navio in navios_pendentes:
         for carga in navio.cargas:
             if carga.categoria == "OUTROS_PENDENTE":
-                _solicitar_classificacao_carga(carga, navio.nome)
-                session.commit()
+                raise CargaNaoClassificadaError(
+                    imo_id=navio.imo_id,
+                    navio_nome=navio.nome,
+                    carga_id=carga.id,
+                    carga_descricao=carga.descricao
+                )
 
         _auditar_documentacao_navio(navio)
+        auditos.append(navio.to_dto())
 
     session.commit()
+    return auditos
 
 
 def excluir_registro_navio(session, imo_id: str):
     """
     Exclui o registro de um navio e suas cargas associadas do banco de dados.
-
-    Args:
-        session (Session): Sessão ativa do banco de dados.
-        imo_id (str): Identificador IMO do Navio alvo da exclusão.
     """
     navio = session.query(Navio).filter(Navio.imo_id == imo_id).first()
-    if navio:
-        if navio.status == StatusNavio.ATRACADO:
-            print(
-                f"[ADMIN] Erro: Não é possível excluir o navio '{navio.nome}' ({imo_id}) pois ele está atualmente ATRACADO. Desatraque-o primeiro."
-            )
-            return
+    if not navio:
+        raise ValueError(f"Nenhum navio encontrado com o IMO ID '{imo_id}'.")
 
-        nome_navio = navio.nome
-        session.delete(navio)
-        session.commit()
-        print(
-            f"[ADMIN] Sucesso: Registro do navio '{nome_navio}' ({imo_id}) foi excluído definitivamente."
-        )
-    else:
-        print(f"[ADMIN] Erro: Nenhum navio encontrado com o IMO ID '{imo_id}'.")
+    if navio.status == StatusNavio.ATRACADO:
+        raise ValueError(f"Não é possível excluir o navio '{navio.nome}' pois ele está atualmente ATRACADO.")
+
+    session.delete(navio)
+    session.commit()
+
+
+def editar_registro_navio(session, imo_id: str, nome: str, capitao: str, companhia: str) -> NavioDTO:
+    """
+    Edita os dados cadastrais básicos de um navio.
+    """
+    navio = session.query(Navio).filter(Navio.imo_id == imo_id).first()
+    if not navio:
+        raise ValueError("Navio não encontrado.")
+    navio.nome = nome
+    navio.nome_capitao = capitao
+    navio.companhia = companhia
+    session.commit()
+    return navio.to_dto()
+
+
+def obter_solicitacoes_pendentes_dto(session) -> list[NavioDTO]:
+    """
+    Retorna uma lista de DTOs dos navios com status PENDENTE.
+    """
+    pendentes = (
+        session.query(Navio)
+        .options(joinedload(Navio.cargas))
+        .filter(Navio.status == StatusNavio.PENDENTE)
+        .all()
+    )
+    return [navio.to_dto() for navio in pendentes]
+
+
+def obter_todos_navios_dto(session) -> list[NavioDTO]:
+    """
+    Retorna todos os navios cadastrados como DTOs.
+    """
+    navios = (
+        session.query(Navio)
+        .options(joinedload(Navio.cargas))
+        .all()
+    )
+    return [navio.to_dto() for navio in navios]
+
+
+def auditar_navio_individual(session, imo_id: str, acao: str) -> NavioDTO:
+    """
+    Aprova ou rejeita uma solicitação individual de navio.
+    """
+    navio = (
+        session.query(Navio)
+        .options(joinedload(Navio.cargas))
+        .filter(Navio.imo_id == imo_id)
+        .first()
+    )
+    if not navio:
+        raise ValueError("Navio não encontrado.")
+
+    if acao == "APROVAR":
+        # Regra de negócio: se tem documento de alfândega faltando em alguma carga, rejeita.
+        if any(not c.documento_alfandega for c in navio.cargas):
+            navio.status = StatusNavio.REJEITADO
+        else:
+            navio.status = StatusNavio.VALIDADO
+    elif acao == "REJEITAR":
+        navio.status = StatusNavio.REJEITADO
+
+    session.commit()
+    return navio.to_dto()
+
+
+

@@ -3,22 +3,25 @@ import re
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from cad import Base, Atracacao, Navio, Vaga, StatusVaga, StatusNavio
+from cad import Base, Atracacao, Navio, Vaga, StatusVaga, StatusNavio, obter_sessao, inicializar_banco
 from controller_cadastros import (
     solicitar_pre_cadastro,
     auditar_solicitacoes_pendentes,
     excluir_registro_navio,
+    classificar_carga,
+    editar_registro_navio,
+    CargaNaoClassificadaError,
 )
 from controller_operacao import (
     atracar_navio,
     registrar_desatracacao,
-    exibir_painel_vagas,
-    exibir_log_operacoes,
+    obter_painel_vagas_dto,
+    obter_log_operacoes_dto,
 )
-from ord_propriety import exibir_fila_atracacao
+from ord_propriety import obter_fila_atracacao_dto
 from pop_bd import gerar_navios_fake, gerar_vagas_iniciais
 
-# Constantes pro sonarqube não perturbar mais
+# Constantes
 REGEX_NOME_VALIDO = r"[A-Za-z0-9À-ÿ\s\-']+"
 MSG_OPCAO_INVALIDA = "Opção inválida."
 MSG_ERRO_OPCAO_INVALIDA = "Erro: Opção inválida."
@@ -161,6 +164,7 @@ def coletar_dados_cadastro(session):
         eh_perecivel=eh_perecivel,
         possui_documentos=possui_documentos,
     )
+    print(f"[CAPITÃO] Pré-cadastro realizado: Navio '{nome}' ({imo}) adicionado com status PENDENTE.")
 
 
 def editar_navio(session):
@@ -174,21 +178,25 @@ def editar_navio(session):
         return
 
     print(f"\n Editando: {navio.nome} | Pressione ENTER para manter o valor atual.")
-    navio.nome = _obter_nome_edicao("Novo Nome", navio.nome)
-    navio.nome_capitao = _obter_nome_edicao("Novo Capitão", navio.nome_capitao)
-    navio.companhia = _obter_nome_edicao("Nova Companhia", navio.companhia)
+    novo_nome = _obter_nome_edicao("Novo Nome", navio.nome)
+    novo_capitao = _obter_nome_edicao("Novo Capitão", navio.nome_capitao)
+    nova_companhia = _obter_nome_edicao("Nova Companhia", navio.companhia)
 
-    session.commit()
-    print(f"\n Dados do navio {navio.imo_id} atualizados com sucesso no sistema!")
+    try:
+        editar_registro_navio(session, navio.imo_id, novo_nome, novo_capitao, nova_companhia)
+        print(f"\n Dados do navio {navio.imo_id} atualizados com sucesso no sistema!")
+    except Exception as e:
+        print(f"Erro ao editar navio: {e}")
 
 
 def _atracar_lote(session):
     atr_count = 0
     while True:
-        vaga_livre = session.query(Vaga).filter(Vaga.status == StatusVaga.LIVRE).first()
-        navio_fila = (
-            session.query(Navio).filter(Navio.status == StatusNavio.VALIDADO).first()
-        )
+        vagas = obter_painel_vagas_dto(session)
+        vaga_livre = next((v for v in vagas if v.status == "LIVRE"), None)
+        
+        fila = obter_fila_atracacao_dto(session)
+        navio_fila = fila[0] if fila else None
 
         if not vaga_livre or not navio_fila:
             if atr_count == 0:
@@ -214,7 +222,11 @@ def iniciar_atracacao(session):
 
     limpar_tela()
     if escolha_atr == "1":
-        atracar_navio(session)
+        log = atracar_navio(session)
+        if log:
+            print(f"Navio {log.navio_imo_id} atracado na Vaga {log.vaga_id} com sucesso.")
+        else:
+            print("Nenhum navio disponível na fila ou nenhuma vaga livre.")
     elif escolha_atr == "2":
         _atracar_lote(session)
     elif escolha_atr == "0":
@@ -224,21 +236,19 @@ def iniciar_atracacao(session):
 
 
 def desatracar_navio(session):
-    atracacoes_ativas = (
-        session.query(Atracacao).filter(Atracacao.data_hora_fim.is_(None)).all()
-    )
-    if not atracacoes_ativas:
+    vagas = obter_painel_vagas_dto(session)
+    vagas_ocupadas = [v for v in vagas if v.status == "OCUPADA"]
+    if not vagas_ocupadas:
         print("Não há navios atracados no momento.")
         return
 
     print("\n--- NAVIOS ATRACADOS ---")
-    for i, atracacao in enumerate(atracacoes_ativas, start=1):
-        navio = (
-            session.query(Navio).filter(Navio.imo_id == atracacao.navio_imo_id).first()
-        )
+    for i, vaga in enumerate(vagas_ocupadas, start=1):
+        navio = vaga.navio_atracado
         nome_navio = navio.nome if navio else "Desconhecido"
+        imo = navio.imo_id if navio else "Desconhecido"
         print(
-            f"[{i}] {nome_navio} (IMO: {atracacao.navio_imo_id}) - Vaga {atracacao.vaga_id}"
+            f"[{i}] {nome_navio} (IMO: {imo}) - Vaga {vaga.id}"
         )
     print("[T] Desatracar TODOS os navios")
     print(MSG_CANCELAR)
@@ -250,24 +260,31 @@ def desatracar_navio(session):
     if escolha == "0":
         print(MSG_OPERACAO_CANCELADA)
     elif escolha == "T":
-        for atracacao in atracacoes_ativas:
-            registrar_desatracacao(session, atracacao.navio_imo_id)
+        count = 0
+        for vaga in vagas_ocupadas:
+            if vaga.navio_atracado:
+                registrar_desatracacao(session, vaga.navio_atracado.imo_id)
+                count += 1
         print(
-            f"\nSucesso: Todos os {len(atracacoes_ativas)} navios foram desatracados."
+            f"\nSucesso: Todos os {count} navios foram desatracados."
         )
 
-    elif escolha.isdigit() and 1 <= int(escolha) <= len(atracacoes_ativas):
+    elif escolha.isdigit() and 1 <= int(escolha) <= len(vagas_ocupadas):
         idx = int(escolha) - 1
-        registrar_desatracacao(session, atracacoes_ativas[idx].navio_imo_id)
+        navio = vagas_ocupadas[idx].navio_atracado
+        if navio:
+            registrar_desatracacao(session, navio.imo_id)
+            print(f"Desatracação do navio {navio.imo_id} registrada. Vaga {vagas_ocupadas[idx].id} agora está LIVRE.")
 
     else:
         imo_busca = escolha if escolha.startswith("IMO") else f"IMO{escolha}"
-        atracacao_encontrada = next(
-            (a for a in atracacoes_ativas if a.navio_imo_id == imo_busca), None
+        vaga_encontrada = next(
+            (v for v in vagas_ocupadas if v.navio_atracado and v.navio_atracado.imo_id == imo_busca), None
         )
 
-        if atracacao_encontrada:
+        if vaga_encontrada:
             registrar_desatracacao(session, imo_busca)
+            print(f"Desatracação do navio {imo_busca} registrada. Vaga {vaga_encontrada.id} agora está LIVRE.")
         else:
             print(
                 " Erro: Navio não encontrado na lista de atracados ou opção inválida."
@@ -284,7 +301,11 @@ def menu_excluir_navio(session):
     if not navio:
         return
 
-    excluir_registro_navio(session, navio.imo_id)
+    try:
+        excluir_registro_navio(session, navio.imo_id)
+        print(f"[ADMIN] Sucesso: Registro do navio '{navio.nome}' ({navio.imo_id}) foi excluído definitivamente.")
+    except Exception as e:
+        print(f"[ADMIN] Erro: {e}")
 
 
 def _gerar_apenas_navios(session):
@@ -401,6 +422,127 @@ def _selecionar_ou_pesquisar_navio(session):
     return None
 
 
+def auditar_solicitacoes(session):
+    while True:
+        try:
+            auditos = auditar_solicitacoes_pendentes(session)
+            if not auditos:
+                print("[ADMIN] Não há solicitações pendentes para auditoria no momento.")
+            else:
+                for navio in auditos:
+                    if navio.status == "VALIDADO":
+                        print(f"[ADMIN] SUCESSO: Navio '{navio.nome}' ({navio.imo_id}) VALIDADO. Aprovado para entrar na Fila de Atracação.")
+                    else:
+                        print(f"[ADMIN] AVISO: Navio '{navio.nome}' ({navio.imo_id}) REJEITADO. Documentação da carga incompleta.")
+            break
+        except CargaNaoClassificadaError as err:
+            print(f"\nAtenção: O navio {err.navio_nome} possui uma carga não classificada: [{err.carga_descricao}].")
+            print("[1] Ultra Perecível | [2] Alta Perecibilidade | [3] Baixa Perecibilidade | [4] Comum")
+            opcoes = {
+                "1": ("URGENTE_PERECIVEL", True),
+                "2": ("ALTA_PERECIBILIDADE", True),
+                "3": ("BAIXA_PERECIBILIDADE", True),
+                "4": ("COMUM", False),
+            }
+            while True:
+                escolha = input("Classifique a carga (1-4): ").strip()
+                if escolha in opcoes:
+                    categoria, eh_perecivel = opcoes[escolha]
+                    classificar_carga(session, err.carga_id, categoria, eh_perecivel)
+                    break
+                print("Opção inválida. Tente novamente.")
+
+
+def mostrar_fila_atracacao(session):
+    fila = obter_fila_atracacao_dto(session)
+    if not fila:
+        print("Aviso: A fila de atracação está vazia no momento (Nenhum navio VALIDADO).")
+        return
+
+    print(
+        f"\n{'POS':<4} | {'IMO':<12} | {'NOME DA EMBARCAÇÃO':<30} | {'COMPANHIA':<25} | {'SCORE':<12} | {'ESPERA'}"
+    )
+    print("-" * 110)
+
+    for pos, navio in enumerate(fila, start=1):
+        if navio.data_solicitacao:
+            from datetime import datetime
+            espera = datetime.now() - navio.data_solicitacao
+            espera_str = str(espera).split(".")[0]
+        else:
+            espera_str = "N/A"
+
+        print(
+            f"{pos:<4} | {navio.imo_id:<12} | {navio.nome:<30} | {navio.companhia[:25]:<25} | {navio.score:<12.2f} | {espera_str}"
+        )
+
+
+def mostrar_painel_vagas(session):
+    vagas = obter_painel_vagas_dto(session)
+    if not vagas:
+        print("Nenhuma vaga cadastrada no sistema.")
+        return
+
+    total_vagas = len(vagas)
+    vagas_livres = sum(1 for v in vagas if v.status == "LIVRE")
+    vagas_ocupadas = total_vagas - vagas_livres
+
+    print("\n" + "=" * 70)
+    print("DASHBOARD DO PORTO - STATUS DAS VAGAS")
+    print(
+        f"Total: {total_vagas} | Disponíveis: {vagas_livres} | Ocupadas: {vagas_ocupadas}"
+    )
+    print("=" * 70)
+
+    cor_verde = "\033[92m"
+    cor_vermelha = "\033[91m"
+    reset = "\033[0m"
+
+    for vaga in vagas:
+        if vaga.status == "LIVRE":
+            print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {cor_verde}[LIVRE]{reset}")
+        else:
+            navio = vaga.navio_atracado
+            nome_navio = navio.nome if navio else "Desconhecido"
+            imo = navio.imo_id if navio else "Desconhecido"
+            data_inicio = (
+                vaga.data_hora_inicio.strftime("%Y-%m-%d %H:%M:%S")
+                if vaga.data_hora_inicio
+                else "N/A"
+            )
+            print(
+                f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {cor_vermelha}[OCUPADA]{reset} -> Navio: {nome_navio} (IMO: {imo}) - Atracado desde: {data_inicio}"
+            )
+
+
+def mostrar_log_operacoes(session):
+    eventos = obter_log_operacoes_dto(session)
+    print(f"\n{'--- LOG DE OPERAÇÕES (HISTÓRICO) ---'}")
+    if not eventos:
+        print("Nenhuma operação registrada no histórico.")
+        return
+
+    print(
+        f"{'DATA/HORA':<20} | {'EVENTO':<16} | {'NAVIO (IMO)':<15} | {'VAGA':<7} | {'OP ID'}"
+    )
+    print("-" * 77)
+
+    cor_verde = "\033[92m"
+    cor_vermelha = "\033[91m"
+    reset = "\033[0m"
+
+    for ev in eventos:
+        data_str = ev.data_hora.strftime("%Y-%m-%d %H:%M:%S")
+        if ev.tipo == "ATRACAO":
+            evento_str = f"{cor_verde}{'[+] ATRACAÇÃO':<16}{reset}"
+        else:
+            evento_str = f"{cor_vermelha}{'[-] DESATRACAÇÃO':<16}{reset}"
+
+        print(
+            f"{data_str:<20} | {evento_str} | {ev.navio_imo_id:<15} | Vaga {ev.vaga_id:<2} | OP-{ev.id:03d}"
+        )
+
+
 def painel_admin(session, engine):
     while True:
         print("\n--- PAINEL DO ADMINISTRADOR ---")
@@ -421,17 +563,17 @@ def painel_admin(session, engine):
         if op_admin == "1":
             menu_gerenciar_navios(session)
         elif op_admin == "2":
-            auditar_solicitacoes_pendentes(session)
+            auditar_solicitacoes(session)
         elif op_admin == "3":
-            exibir_fila_atracacao(session)
+            mostrar_fila_atracacao(session)
         elif op_admin == "4":
             iniciar_atracacao(session)
         elif op_admin == "5":
             desatracar_navio(session)
         elif op_admin == "6":
-            exibir_painel_vagas(session)
+            mostrar_painel_vagas(session)
         elif op_admin == "7":
-            exibir_log_operacoes(session)
+            mostrar_log_operacoes(session)
         elif op_admin == "8":
             menu_excluir_navio(session)
         elif op_admin == "9":
@@ -448,10 +590,9 @@ def painel_admin(session, engine):
 def main():
     """Inicializa a aplicação e apresenta o menu principal de navegação do sistema."""
     db_path = Path(__file__).parent / "porto.db"
-    engine = create_engine(f"sqlite:///{db_path}")
-    Base.metadata.create_all(engine)
+    engine = inicializar_banco(str(db_path))
 
-    with Session(engine) as session:
+    with obter_sessao() as session:
         gerar_vagas_iniciais(session, quantidade=5)
 
         total_navios = session.query(Navio).count()

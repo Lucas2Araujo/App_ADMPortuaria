@@ -8,7 +8,7 @@ on:
         required: true
         default: 'v1.0.0'
       release_title:
-        description: 'Título da Release (ex: Sprint 1 - Versão Final)'
+        description: 'Título da Release (ex: Sprint 2 - Versão Final)'
         required: true
         default: 'Sprint 2 - Versão Final'
 
@@ -46,13 +46,16 @@ jobs:
         run: pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
 
       - name: 🎨 Compilar GUI com Flet Pack
-        run: python -m flet pack src/gui/main_gui.py --name ${{ matrix.gui_artifact_name }}
+        run: flet pack src/gui/main_gui.py --name ${{ matrix.gui_artifact_name }}
 
       - name: 🌐 Compilar Web (Apenas Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
-          python -m flet publish src/gui/main_gui.py --distpath dist/web --base-url "/$REPO_NAME/"
+          # base-url aponta para /REPO/web-app/ pois a documentação fica na raiz
+          flet publish src/gui/main_gui.py \
+            --distpath dist/web \
+            --base-url "/$REPO_NAME/web-app/"
           cd dist/web
           zip -r ../Adm_Porto_Web.zip .
 
@@ -62,30 +65,74 @@ jobs:
           name: build-outputs-${{ matrix.os }}
           path: dist/
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # Publica documentação MkDocs + Web App no GitHub Pages de forma unificada.
+  # A documentação fica na raiz e a web app em /web-app/.
+  # Isso evita conflito com o uml_mkdocs.yml (que também usa gh-pages).
+  # ESTRATÉGIA: buildamos o MkDocs aqui e injetamos o build da web app antes
+  # de fazer o deploy, para que tudo saia em um único artefato do Pages.
+  # ──────────────────────────────────────────────────────────────────────────
   deploy_pages:
-    name: Publicar no GitHub Pages
+    name: Publicar Docs + Web App no GitHub Pages
     needs: build
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: 📥 Baixar Artefato da Web
+      - name: 📥 Clonar o Repositório
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 Instalar Dependências de Sistema (Java, Graphviz, PlantUML)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-jre graphviz plantuml
+
+      - name: 🖼️ Gerar Imagens PNG dos Diagramas
+        run: |
+          DEST="$(pwd)/docs/Diagramas/Imagens"
+          mkdir -p "$DEST"
+          find "docs/Diagramas/Código dos diagramas" -name "*.puml" | while read -r puml_file; do
+            echo "Gerando: $puml_file"
+            plantuml -tpng -o "$DEST" "$puml_file"
+          done
+          echo "--- Imagens geradas ---"
+          ls -la "$DEST"
+
+      - name: 📦 Instalar MkDocs e Plugins
+        run: pip install mkdocs-material mkdocstrings[python] mkdocs-glightbox
+
+      - name: 🏗️ Construir Site MkDocs
+        run: mkdocs build --site-dir site_final
+
+      - name: 📥 Baixar Artefato da Web (build Flet)
         uses: actions/download-artifact@v4
         with:
           name: build-outputs-ubuntu-latest
           path: dist_temp
 
-      - name: 🔧 Configurar Pages
-        uses: actions/configure-pages@v4
+      - name: 🔗 Integrar Web App na pasta do site
+        run: |
+          # Copia o build da web para /web-app/ dentro do site MkDocs
+          mkdir -p site_final/web-app
+          cp -r dist_temp/web/. site_final/web-app/
+          echo "--- Conteúdo final do site ---"
+          ls -la site_final/
+          ls -la site_final/web-app/
 
       - name: 📤 Enviar Artefato do Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist_temp/web
+          path: site_final
 
       - name: 🚀 Deploy no GitHub Pages
         id: deployment
@@ -110,16 +157,16 @@ jobs:
       - name: 🔐 Gerar Hashes SHA-256 e Organizar Arquivos
         run: |
           mkdir arquivos_finais
-          
+
           # Copiar os binários e arquivos do Linux
           mv binarios_temp/build-outputs-ubuntu-latest/Adm_Porto arquivos_finais/
           mv binarios_temp/build-outputs-ubuntu-latest/Adm_Porto_GUI arquivos_finais/
           mv binarios_temp/build-outputs-ubuntu-latest/Adm_Porto_Web.zip arquivos_finais/
-          
+
           # Copiar os binários do Windows
           mv binarios_temp/build-outputs-windows-latest/Adm_Porto.exe arquivos_finais/
           mv binarios_temp/build-outputs-windows-latest/Adm_Porto_GUI.exe arquivos_finais/
-          
+
           cd arquivos_finais
           sha256sum Adm_Porto Adm_Porto.exe Adm_Porto_GUI Adm_Porto_GUI.exe Adm_Porto_Web.zip > checksums_oficiais.txt
 
