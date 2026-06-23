@@ -54,7 +54,7 @@ jobs:
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
           # base-url aponta para /REPO/web-app/ pois a documentação fica na raiz
           flet publish src/gui/main_gui.py \
-            --distpath dist/web \
+            --distpath "$(pwd)/dist/web" \
             --base-url "/$REPO_NAME/web-app/"
           cd dist/web
           zip -r ../Adm_Porto_Web.zip .
@@ -76,6 +76,9 @@ jobs:
     name: Publicar Docs + Web App no GitHub Pages
     needs: build
     runs-on: ubuntu-latest
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
     permissions:
       contents: write
       pages: write
