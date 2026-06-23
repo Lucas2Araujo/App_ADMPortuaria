@@ -1,7 +1,7 @@
 import enum
 import os
 from datetime import datetime
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, Session
 from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime, Enum, create_engine
 from typing import List, Optional, Tuple
 
