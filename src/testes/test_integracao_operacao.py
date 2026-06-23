@@ -57,7 +57,7 @@ import os
 import pytest
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
 
 # ---------------------------------------------------------------------------
 # Ajuste do sys.path para que os módulos src/ sejam encontrados ao rodar com
