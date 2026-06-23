@@ -22,8 +22,10 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: Adm_Porto
+            gui_artifact_name: Adm_Porto_GUI
           - os: windows-latest
             artifact_name: Adm_Porto.exe
+            gui_artifact_name: Adm_Porto_GUI.exe
 
     steps:
       - name: 📥 Clonar o Repositório
@@ -40,14 +42,54 @@ jobs:
           pip install -r src/requirements.txt
           pip install pyinstaller
 
-      - name: 🔨 Compilar com PyInstaller
+      - name: 🔨 Compilar CLI com PyInstaller
         run: pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
 
-      - name: 📤 Guardar Binário Temporariamente
+      - name: 🎨 Compilar GUI com Flet Pack
+        run: python -m flet pack src/gui/main_gui.py --name ${{ matrix.gui_artifact_name }}
+
+      - name: 🌐 Compilar Web (Apenas Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          python -m flet publish src/gui/main_gui.py --distpath dist/web --base-url "/$REPO_NAME/"
+          cd dist/web
+          zip -r ../Adm_Porto_Web.zip .
+
+      - name: 📤 Guardar Artefatos Temporariamente
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: dist/${{ matrix.artifact_name }}
+          name: build-outputs-${{ matrix.os }}
+          path: dist/
+
+  deploy_pages:
+    name: Publicar no GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 📥 Baixar Artefato da Web
+        uses: actions/download-artifact@v4
+        with:
+          name: build-outputs-ubuntu-latest
+          path: dist_temp
+
+      - name: 🔧 Configurar Pages
+        uses: actions/configure-pages@v4
+
+      - name: 📤 Enviar Artefato do Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist_temp/web
+
+      - name: 🚀 Deploy no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   create_release:
     name: Criar Release Oficial e Analisar Segurança
@@ -68,11 +110,18 @@ jobs:
       - name: 🔐 Gerar Hashes SHA-256 e Organizar Arquivos
         run: |
           mkdir arquivos_finais
-          mv binarios_temp/Adm_Porto/Adm_Porto arquivos_finais/
-          mv binarios_temp/Adm_Porto.exe/Adm_Porto.exe arquivos_finais/
+          
+          # Copiar os binários e arquivos do Linux
+          mv binarios_temp/build-outputs-ubuntu-latest/Adm_Porto arquivos_finais/
+          mv binarios_temp/build-outputs-ubuntu-latest/Adm_Porto_GUI arquivos_finais/
+          mv binarios_temp/build-outputs-ubuntu-latest/Adm_Porto_Web.zip arquivos_finais/
+          
+          # Copiar os binários do Windows
+          mv binarios_temp/build-outputs-windows-latest/Adm_Porto.exe arquivos_finais/
+          mv binarios_temp/build-outputs-windows-latest/Adm_Porto_GUI.exe arquivos_finais/
           
           cd arquivos_finais
-          sha256sum Adm_Porto Adm_Porto.exe > checksums_oficiais.txt
+          sha256sum Adm_Porto Adm_Porto.exe Adm_Porto_GUI Adm_Porto_GUI.exe Adm_Porto_Web.zip > checksums_oficiais.txt
 
       - name: 🛡️ VirusTotal GitHub Action
         uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2
@@ -81,6 +130,9 @@ jobs:
           files: |
             arquivos_finais/Adm_Porto
             arquivos_finais/Adm_Porto.exe
+            arquivos_finais/Adm_Porto_GUI
+            arquivos_finais/Adm_Porto_GUI.exe
+            arquivos_finais/Adm_Porto_Web.zip
 
       - name: 🚀 Criar Nova Release e Fazer Upload dos Arquivos
         env:
@@ -90,7 +142,10 @@ jobs:
           gh release create "${{ github.event.inputs.tag_name }}" \
             Adm_Porto \
             Adm_Porto.exe \
+            Adm_Porto_GUI \
+            Adm_Porto_GUI.exe \
+            Adm_Porto_Web.zip \
             checksums_oficiais.txt \
             --title "${{ github.event.inputs.release_title }}" \
-            --notes "Release gerada de forma automatizada via GitHub Actions. Os executáveis foram empacotados, verificados criptograficamente e analisados via VirusTotal." \
+            --notes "Release gerada de forma automatizada via GitHub Actions. Os executáveis CLI e GUI (Windows/Linux) e a aplicação Web foram empacotados, verificados criptograficamente e analisados via VirusTotal." \
             --repo ${{ github.repository }}
