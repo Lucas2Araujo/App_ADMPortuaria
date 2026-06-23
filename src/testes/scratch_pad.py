@@ -1,4 +1,5 @@
 import flet as ft
+
 print(ft.__version__)
 try:
     print(ft.padding.only(top=5, bottom=5))
@@ -14,4 +15,3 @@ try:
     print(ft.Padding(0, 5, 0, 5))
 except Exception as e:
     print("Padding positional:", type(e).__name__, e)
-

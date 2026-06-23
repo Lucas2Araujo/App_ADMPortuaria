@@ -1,5 +1,10 @@
 import flet as ft
-def handler(e): pass
+
+
+def handler(e):
+    pass
+
+
 try:
     d = ft.Dropdown(options=[ft.dropdown.Option("A")], on_change=handler)
     print("on_change works")

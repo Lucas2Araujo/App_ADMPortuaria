@@ -18,34 +18,11 @@ if diretorio_src not in sys.path:
     sys.path.append(diretorio_src)
 
 from controller_cadastros import solicitar_pre_cadastro
+from telas.painel_adm import validar_formulario_navio
 
 # Engine compartilhado — mesmo padrão do painel_adm.py
-diretorio_raiz = os.path.abspath(os.path.join(diretorio_src, ".."))
-db_path = os.path.join(diretorio_raiz, "porto.db")
+db_path = os.path.join(diretorio_src, "porto.db")
 engine = create_engine(f"sqlite:///{db_path}")
-
-# Expressão regular padrão para validação de campos textuais
-REGEX_VALIDACAO = r"[A-Za-z0-9À-ÿ\s\-']+"
-
-# Estrutura de dados espelhada no dicionário MAPA_CARGAS do pop_bd.py
-MAPA_CARGAS_SISTEMA = {
-    'Vacinas': 'URGENTE_PERECIVEL',
-    'Carne Bovina': 'URGENTE_PERECIVEL',
-    'Peixes': 'URGENTE_PERECIVEL',
-    'Frutas': 'ALTA_PERECIBILIDADE',
-    'Verduras': 'ALTA_PERECIBILIDADE',
-    'Grãos': 'BAIXA_PERECIBILIDADE',
-    'Biscoitos': 'BAIXA_PERECIBILIDADE',
-    'Petróleo': 'COMUM',
-    'Minério de Ferro': 'COMUM',
-    'Containers': 'COMUM',
-    'Automóveis': 'COMUM',
-    'Produtos Químicos': 'COMUM',
-    'Gás Natural': 'COMUM',
-    'Carvão': 'COMUM',
-    'Eletrodomésticos': 'COMUM',
-    'RTX 5090': 'COMUM',
-}
 
 
 def obter_view(page: ft.Page):
@@ -95,30 +72,21 @@ def obter_view(page: ft.Page):
         width=200,
     )
 
-    # Mapeia as opções do Dropdown usando as chaves do pop_bd.py
-    opcoes_dropdown = [ft.dropdown.Option(prod) for prod in MAPA_CARGAS_SISTEMA.keys()]
-    opcoes_dropdown.append(
-        ft.dropdown.Option(key="OUTROS", text="Outros (Especificar Manualmente)")
-    )
-
-    txt_descricao_manual = ft.TextField(
-        label="Especifique a Carga",
-        hint_text="Ex: Maquinário Industrial Agrícola",
-        visible=False,
-        icon=ft.Icons.DESCRIPTION,
-        multiline=True,
-        min_lines=2,
-    )
-
-    def monitorar_dropdown_carga(e):
-        txt_descricao_manual.visible = dd_produto_carga.value == "OUTROS"
-        page.update()
-
     dd_produto_carga = ft.Dropdown(
-        label="Carga Principal Declarada",
-        options=opcoes_dropdown,
-        width=380,
-        on_select=monitorar_dropdown_carga,
+        label="Categoria da Carga",
+        width=400,
+        options=[
+            ft.dropdown.Option(
+                key="URGENTE_PERECIVEL", text="Medicamentos / Carnes (Perecível)"
+            ),
+            ft.dropdown.Option(
+                key="ALTA_PERECIBILIDADE", text="Frutas / Laticínios (Perecível)"
+            ),
+            ft.dropdown.Option(key="BAIXA_PERECIBILIDADE", text="Grãos Úmidos"),
+            ft.dropdown.Option(
+                key="COMUM", text="Carga Geral / Minérios / Contêineres"
+            ),
+        ],
     )
 
     switch_docs = ft.Switch(
@@ -128,87 +96,35 @@ def obter_view(page: ft.Page):
 
     # --- PROCESSO DE VALIDAÇÃO E SUBMISSÃO ---
     def processar_submissao_cadastro(e):
-        # Reset de erros visuais anteriores
-        txt_imo.error_text = None
-        txt_nome_navio.error_text = None
-        txt_capitao.error_text = None
-        txt_companhia.error_text = None
-        txt_peso.error_text = None
-        dd_produto_carga.error_text = None
-        txt_descricao_manual.error_text = None
+        erros = validar_formulario_navio(
+            imo=txt_imo.value or "",
+            nome=txt_nome_navio.value or "",
+            capitao=txt_capitao.value or "",
+            companhia=txt_companhia.value or "",
+            peso=txt_peso.value or "",
+            categoria=dd_produto_carga.value or "",
+        )
 
-        erros_detectados = False
+        txt_imo.error_text = erros.get("imo")
+        txt_nome_navio.error_text = erros.get("nome")
+        txt_capitao.error_text = erros.get("capitao")
+        txt_companhia.error_text = erros.get("companhia")
+        txt_peso.error_text = erros.get("peso")
+        dd_produto_carga.error_text = erros.get("categoria")
 
-        # 1. Validação do IMO (Exatamente 7 dígitos numéricos)
-        imo_val = (txt_imo.value or "").strip()
-        if not imo_val or len(imo_val) != 7:
-            txt_imo.error_text = "O IMO deve conter exatamente 7 números."
-            erros_detectados = True
-
-        # 2. Validações de campos de texto obrigatórios
-        campos_texto = [
-            (txt_nome_navio, "O nome do navio é obrigatório."),
-            (txt_capitao, "O nome do capitão é obrigatório."),
-            (txt_companhia, "A companhia é obrigatória."),
-        ]
-
-        for campo, msg_erro in campos_texto:
-            valor = (campo.value or "").strip()
-            if not valor:
-                campo.error_text = msg_erro
-                erros_detectados = True
-            elif not re.fullmatch(REGEX_VALIDACAO, valor):
-                campo.error_text = "Contém caracteres inválidos."
-                erros_detectados = True
-
-        # 3. Validação do Peso
-        peso_val = (txt_peso.value or "").strip()
-        peso_int = 0
-        if not peso_val:
-            txt_peso.error_text = "O peso é obrigatório."
-            erros_detectados = True
-        else:
-            try:
-                peso_int = int(peso_val)
-                if peso_int <= 0:
-                    txt_peso.error_text = "O peso deve ser maior que zero."
-                    erros_detectados = True
-            except ValueError:
-                txt_peso.error_text = "Insira um número inteiro válido."
-                erros_detectados = True
-
-        # 4. Validação da Seleção da Carga
-        if not dd_produto_carga.value:
-            dd_produto_carga.error_text = "Selecione o tipo de carga."
-            erros_detectados = True
-        elif dd_produto_carga.value == "OUTROS" and not (
-            txt_descricao_manual.value or ""
-        ).strip():
-            txt_descricao_manual.error_text = "Especifique a descrição da carga."
-            erros_detectados = True
-
-        if erros_detectados:
+        if erros:
             page.update()
             return
 
         # --- PROCESSAMENTO COMPATÍVEL COM O BACKEND ---
-        imo_formatado = f"IMO{imo_val}"
+        imo_formatado = f"IMO{txt_imo.value.strip()}"
+        peso = int(txt_peso.value.strip())
 
-        if dd_produto_carga.value == "OUTROS":
-            carga_desc = (txt_descricao_manual.value or "").strip()
-            categoria = "OUTROS_PENDENTE"
-            eh_perecivel = False
-        else:
-            carga_desc = dd_produto_carga.value
-            categoria = MAPA_CARGAS_SISTEMA[carga_desc]
-            eh_perecivel = categoria in [
-                'URGENTE_PERECIVEL',
-                'ALTA_PERECIBILIDADE',
-                'BAIXA_PERECIBILIDADE',
-            ]
-
-        # Persistência atômica no banco de dados
         try:
+            eh_perecivel = dd_produto_carga.value in [
+                "URGENTE_PERECIVEL",
+                "ALTA_PERECIBILIDADE",
+            ]
             with Session(engine) as session:
                 solicitar_pre_cadastro(
                     session=session,
@@ -216,9 +132,9 @@ def obter_view(page: ft.Page):
                     nome=(txt_nome_navio.value or "").strip().upper(),
                     capitao=(txt_capitao.value or "").strip(),
                     companhia=(txt_companhia.value or "").strip(),
-                    carga_desc=carga_desc,
-                    categoria=categoria,
-                    peso=peso_int,
+                    carga_desc=f"Carga: {dd_produto_carga.value}",
+                    categoria=dd_produto_carga.value,
+                    peso=peso,
                     eh_perecivel=eh_perecivel,
                     possui_documentos=switch_docs.value,
                 )
@@ -239,8 +155,6 @@ def obter_view(page: ft.Page):
             txt_companhia.value = ""
             txt_peso.value = ""
             dd_produto_carga.value = None
-            txt_descricao_manual.value = ""
-            txt_descricao_manual.visible = False
             switch_docs.value = False
 
         except Exception as erro:
@@ -275,16 +189,16 @@ def obter_view(page: ft.Page):
                             [
                                 ft.Icon(
                                     ft.Icons.ANCHOR,
-                                    color=ft.Colors.BLUE_400,
-                                    size=28,
+                                    color=ft.Colors.BLUE_GREY_800,
+                                    size=32,
                                 ),
                                 ft.Text(
                                     "Portal da Tripulação - Pré-Cadastro",
-                                    size=20,
+                                    size=26,
                                     weight=ft.FontWeight.BOLD,
                                 ),
                             ],
-                            spacing=8,
+                            spacing=10,
                         ),
                         ft.Text(
                             "Preencha as informações do manifesto de carga para dar "
@@ -305,7 +219,6 @@ def obter_view(page: ft.Page):
                             [dd_produto_carga, txt_peso],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
-                        txt_descricao_manual,
                         ft.Container(
                             padding=ft.Padding(0, 5, 0, 5),
                             content=switch_docs,

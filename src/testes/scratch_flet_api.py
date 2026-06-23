@@ -1,4 +1,6 @@
 import flet as ft
+
+
 def main(page: ft.Page):
     try:
         txt_imo = ft.TextField(
@@ -62,4 +64,6 @@ def main(page: ft.Page):
     except Exception as e:
         print("btn_enviar Error:", e)
 
-ft.app(target=main)
+
+if __name__ == "__main__":
+    ft.app(target=main)

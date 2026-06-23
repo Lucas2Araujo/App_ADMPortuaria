@@ -1,9 +1,11 @@
 import flet as ft
 import sys
-sys.path.insert(0, './gui/telas')
-sys.path.insert(0, '.')
+
+sys.path.insert(0, "./gui/telas")
+sys.path.insert(0, ".")
 
 from gui.telas.painel_tripulacao import obter_view
+
 
 def main(page: ft.Page):
     try:
@@ -13,4 +15,6 @@ def main(page: ft.Page):
     except Exception as e:
         print("Erro ao executar obter_view:", type(e).__name__, e)
 
-ft.app(target=main)
+
+if __name__ == "__main__":
+    ft.app(target=main)

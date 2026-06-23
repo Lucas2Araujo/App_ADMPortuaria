@@ -1,5 +1,5 @@
 @startuml
-title Modelo de Domínio: Administração Portuária (Iteração Final - Sprint 1)
+title Modelo de Domínio: Administração Portuária (Refatorado para a Realidade)
 skinparam classAttributeIconSize 0
 
 class Navio {
@@ -35,6 +35,7 @@ class Atracacao {
 class ControladorCadastros <<Service>> {
   + solicitar_pre_cadastro()
   + auditar_solicitacoes_pendentes()
+  + excluir_registro_navio()
   - _solicitar_classificacao_carga()
   - _auditar_documentacao_navio()
 }
@@ -42,11 +43,16 @@ class ControladorCadastros <<Service>> {
 class MotorDeFila <<Service>> {
   + calcular_score(navio: Navio)
   + obter_proximo_da_fila(): Navio
+  + exibir_fila_atracacao()
+  + criar_subquery_score_cargas()
+  + obter_expressao_score_total()
 }
 
 class ControladorOperacao <<Service>> {
   + atracar_navio()
   + registrar_desatracacao()
+  + exibir_painel_vagas()
+  + exibir_log_operacoes()
 }
 
 ' Relacionamentos do Banco de Dados

@@ -1,4 +1,5 @@
 import flet as ft
+
 try:
     btn = ft.ElevatedButton("Enviar Declaração")
     print("btn1 OK")
@@ -22,4 +23,3 @@ try:
     print("Dropdown prefix_icon OK")
 except Exception as e:
     print("Dropdown Error:", e)
-
