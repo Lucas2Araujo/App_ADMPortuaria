@@ -43,10 +43,18 @@ jobs:
           pip install pyinstaller
 
       - name: 🔨 Compilar CLI com PyInstaller
-        run: pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
+        shell: bash
+        run: |
+          pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
+          mkdir -p bin_outputs
+          mv dist/${{ matrix.artifact_name }}* bin_outputs/
 
       - name: 🎨 Compilar GUI com Flet Pack
-        run: flet pack -y src/gui/main_gui.py --name ${{ matrix.gui_artifact_name }}
+        shell: bash
+        run: |
+          flet pack -y src/gui/main_gui.py --name ${{ matrix.gui_artifact_name }}
+          mkdir -p bin_outputs
+          mv dist/${{ matrix.gui_artifact_name }}* bin_outputs/
 
       - name: 🌐 Compilar Web (Apenas Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -54,16 +62,16 @@ jobs:
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
           # base-url aponta para /REPO/web-app/ pois a documentação fica na raiz
           flet publish src/gui/main_gui.py \
-            --distpath "$(pwd)/dist/web" \
+            --distpath "$(pwd)/bin_outputs/web" \
             --base-url "/$REPO_NAME/web-app/"
-          cd dist/web
+          cd bin_outputs/web
           zip -r ../Adm_Porto_Web.zip .
 
       - name: 📤 Guardar Artefatos Temporariamente
         uses: actions/upload-artifact@v4
         with:
           name: build-outputs-${{ matrix.os }}
-          path: dist/
+          path: bin_outputs/
 
   # ──────────────────────────────────────────────────────────────────────────
   # Publica documentação MkDocs + Web App no GitHub Pages de forma unificada.
