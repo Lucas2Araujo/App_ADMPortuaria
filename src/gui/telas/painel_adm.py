@@ -190,6 +190,83 @@ def obter_view(page: ft.Page):
     )
     page.overlay.append(dialogo_confirmacao)
             
+    loading_atracacao = ft.ProgressRing(visible=False, width=20, height=20)
+    tipo_atracacao = None
+
+    def processar_atracacao_backend():
+        dialogo_confirmar_atracacao.open = False
+        loading_atracacao.visible = True
+        page.update()
+
+        def worker():
+            msg = ""
+            status_cor = ft.Colors.RED
+            try:
+                with Session(engine) as session:
+                    from controller_operacao import atracar_navio
+                    
+                    if tipo_atracacao == "PROXIMO":
+                        sucesso = atracar_navio(session)
+                        if sucesso:
+                            msg = "O próximo navio da fila foi atracado com sucesso!"
+                            status_cor = ft.Colors.GREEN
+                        else:
+                            msg = "Nenhum navio disponível na fila ou nenhuma vaga livre."
+                            status_cor = ft.Colors.ORANGE
+                    
+                    elif tipo_atracacao == "LOTE":
+                        sucesso_count = 0
+                        while atracar_navio(session):
+                            sucesso_count += 1
+                        session.commit()
+                        
+                        if sucesso_count > 0:
+                            msg = f"Atracação em lote concluída! {sucesso_count} navio(s) atracado(s)."
+                            status_cor = ft.Colors.GREEN
+                        else:
+                            msg = "Nenhum navio pôde ser atracado em lote."
+                            status_cor = ft.Colors.ORANGE
+                    session.commit()
+            except Exception as err:
+                msg = f"Erro na operação de atracação: {err}"
+            finally:
+                def finalizar_ui():
+                    loading_atracacao.visible = False
+                    page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status_cor)
+                    page.snack_bar.open = True
+                    carregar_dados()
+                    page.update()
+                page.call_later(finalizar_ui)
+
+        Thread(target=worker).start()
+
+    txt_msg_atracacao = ft.Text("")
+    
+    def fechar_modal_atracacao(e):
+        dialogo_confirmar_atracacao.open = False
+        page.update()
+
+    def abrir_confirmacao_atracacao(tipo):
+        nonlocal tipo_atracacao
+        tipo_atracacao = tipo
+        if tipo == "PROXIMO":
+            txt_msg_atracacao.value = "Deseja atracar o proximo navio?"
+        else:
+            txt_msg_atracacao.value = "Deseja iniciar a atracação em lote de todas as vagas livres?"
+        dialogo_confirmar_atracacao.open = True
+        page.update()
+
+    dialogo_confirmar_atracacao = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("Confirmar Operação de atracaçao"),
+        content=txt_msg_atracacao,
+        actions=[
+            ft.TextButton("Confirmar atracação", on_click=lambda e: processar_atracacao_backend()),
+            ft.TextButton("Cancelar", on_click=fechar_modal_atracacao),
+        ],
+    )
+    page.overlay.append(dialogo_confirmar_atracacao)
+
 
     # =============== DADOS FICTÍCIOS E GRÁFICO (VERSÃO ESTÁVEL) ===============
     hoje = datetime.now()
