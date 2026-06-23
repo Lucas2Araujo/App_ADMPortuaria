@@ -81,6 +81,116 @@ def obter_view(page: ft.Page):
         rows=[],
     )
 
+    tabela_pendentes =ft.DataTable(
+        columns=[
+            ft.DataColumn(ft.Text("ID Navio")),
+            ft.DataColumn(ft.Text("Nome")),
+            ft.DataColumn(ft.Text("Capitão")),
+            ft.DataColumn(ft.Text("Companhia")),
+            ft.DataColumn(ft.Text("Status")),
+            ft.DataColumn(ft.Text("Ações")),
+        ],
+        rows=[],
+    )
+
+    txt_vazio_auditoria =ft.Text("Nenhuma solicitação pendente no momento.", size=12, italic=True, visible= False)
+
+    imo_em_auditoria = None
+    acao_em_auditoria = None
+
+    def carregar_solicitacoes_pendentes():
+        def worker():
+            try:
+                with Session(engine) as session:
+                    pendentes = session.query(Navio).filter(Navio.status == StatusNavio.PENDENTE).all()
+                    novas_linhas = []
+                    for navio in pendentes:
+                        capitao_nome = navio.nome_capitao if hasattr(navio, "nome_capitao") else getattr(navio, "capitao", "N/A")
+                        carga_desc = navio.carga_desc if hasattr(navio, "carga_desc") else "N/A"
+                        
+                        btn_aprovar = ft.IconButton(
+                            icon=ft.Icons.CHECK_CIRCLE, icon_color=ft.Colors.GREEN,
+                            on_click=lambda e, imo=navio.imo_id: abrir_confirmacao(imo, "APROVAR")
+                        )
+                        btn_rejeitar = ft.IconButton(
+                            icon=ft.Icons.CANCEL, icon_color=ft.Colors.RED,
+                            on_click=lambda e, imo=navio.imo_id: abrir_confirmacao(imo, "REJEITAR")
+                        )
+                        novas_linhas.append(
+                            ft.DataRow(cells=[
+                                ft.DataCell(ft.Text(navio.imo_id)),
+                                ft.DataCell(ft.Text(navio.nome)),
+                                ft.DataCell(ft.Text(capitao_nome)),
+                                ft.DataCell(ft.Text(navio.companhia)),
+                                ft.DataCell(ft.Text(carga_desc)),
+                                ft.DataCell(ft.Row([btn_aprovar, btn_rejeitar], spacing=5)),
+                            ])
+                        )
+                def atualizar_ui():
+                    tabela_pendentes.rows = novas_linhas
+                    txt_vazio_auditoria.visible = len(novas_linhas) == 0
+                    tabela_pendentes.visible = len(novas_linhas) > 0
+                    page.update()
+                page.call_later(atualizar_ui)
+            except Exception as err:
+                print(f"Erro na auditoria: {err}")
+        Thread(target=worker).start()
+
+    def processar_auditoria():
+        dialogo_confirmacao.open = False
+        page.update()
+        def worker():
+            msg = ""
+            status_cor = ft.Colors.RED
+            try:
+                with Session(engine) as session:
+                    navio = session.query(Navio).filter(Navio.imo_id == imo_em_auditoria).first()
+                    if navio:
+                        if acao_em_auditoria == "APROVAR":
+                            navio.status = StatusNavio.VALIDADO
+                            msg = f"Navio {navio.nome} APROVADO!"
+                            status_cor = ft.Colors.GREEN
+                        elif acao_em_auditoria == "REJEITAR":
+                            navio.status = StatusNavio.FINALIZADO
+                            msg = f"Solicitação do Navio {navio.nome} REJEITADA!"
+                            status_cor = ft.Colors.ORANGE
+                        session.commit()
+            except Exception as err:
+                msg = f"Erro: {err}"
+            finally:
+                def finalizar():
+                    page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status_cor)
+                    page.snack_bar.open = True
+                    carregar_solicitacoes_pendentes()
+                    carregar_dados() # Atualiza os cards do dashboard também
+                page.call_later(finalizar)
+        Thread(target=worker).start()
+
+    txt_mensagem_modal = ft.Text("")
+    def fechar_modal(e):
+        dialogo_confirmacao.open = False
+        page.update()
+
+    def abrir_confirmacao(imo, acao):
+        nonlocal imo_em_auditoria, acao_em_auditoria
+        imo_em_auditoria = imo
+        acao_em_auditoria = acao
+        txt_mensagem_modal.value = f"Deseja {acao.lower()} a solicitação do navio {imo}?"
+        dialogo_confirmacao.open = True
+        page.update()
+
+    dialogo_confirmacao = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("Confirmar Auditoria"),
+        content=txt_mensagem_modal,
+        actions=[
+            ft.TextButton("Confirmar", on_click=lambda e: processar_auditoria()),
+            ft.TextButton("Cancelar", on_click=fechar_modal),
+        ],
+    )
+    page.overlay.append(dialogo_confirmacao)
+            
+
     # =============== DADOS FICTÍCIOS E GRÁFICO (VERSÃO ESTÁVEL) ===============
     hoje = datetime.now()
     dias_semana = [(hoje - timedelta(days=i)).strftime("%d/%m") for i in range(6, -1, -1)]
@@ -201,6 +311,7 @@ def obter_view(page: ft.Page):
             page.snack_bar.open = True
             page.update()
             return
+        
         btn_salvar_edicao.disabled = True
         loading_indicator.visible = True
         page.update()
@@ -477,18 +588,33 @@ def obter_view(page: ft.Page):
             ft.ElevatedButton("Salvar Solicitação", icon=ft.Icons.SAVE, on_click=salvar_navio, style=ft.ButtonStyle(padding=20)),
         ]),
     )
+    aba_auditoria = ft.Container(
+        padding=20, 
+        visible=False, # Começa oculta para não encavalar com o Dashboard
+        content=ft.Column([
+            ft.Text("Auditoria de Solicitações Pendentes", size=24, weight=ft.FontWeight.BOLD),
+            ft.Divider(),
+            txt_vazio_auditoria, # Texto que diz se não houver navios
+            ft.ListView(controls=[tabela_pendentes], expand=True, spacing=10) # Lista que segura a tabela
+        ]),
+        expand=True
+    )
 
     def trocar_aba(e):
         aba_dashboard.visible = e.control.data == "dashboard"
         aba_gerenciar.visible = e.control.data == "gerenciar"
         aba_vagas.visible = e.control.data == "vagas"
+        aba_auditoria.visible = e.control.data == "auditoria"
+
         if aba_dashboard.visible: carregar_dados()
+        if aba_auditoria.visible: carregar_solicitacoes_pendentes()
         page.update()
 
     botoes_navegacao = ft.Row([
         ft.TextButton("Visão Geral", icon=ft.Icons.PIE_CHART, data="dashboard", on_click=trocar_aba),
         ft.TextButton("Gerenciar Embarcações", icon=ft.Icons.SETTINGS, data="gerenciar", on_click=trocar_aba),
         ft.TextButton("Controle de Vagas", icon=ft.Icons.VIEW_AGENDA, data="vagas", on_click=trocar_aba),
+        ft.TextButton("Auditar Solicitações", icon=ft.Icons.AUDIT_TRAIL, data="auditoria", on_click=trocar_aba),
     ])
 
-    return ft.Container(content=ft.Column([botoes_navegacao, ft.Divider(), aba_dashboard, aba_gerenciar, aba_vagas], expand=True))
+    return ft.Container(content=ft.Column([botoes_navegacao, ft.Divider(), aba_dashboard, aba_gerenciar, aba_vagas, aba_auditoria], expand=True))
