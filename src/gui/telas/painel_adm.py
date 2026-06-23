@@ -246,6 +246,10 @@ def obter_view(page: ft.Page):
         dialogo_confirmar_atracacao.open = False
         page.update()
 
+
+
+#ATRACAÇÃO 
+
     def abrir_confirmacao_atracacao(tipo):
         nonlocal tipo_atracacao
         tipo_atracacao = tipo
@@ -267,7 +271,95 @@ def obter_view(page: ft.Page):
     )
     page.overlay.append(dialogo_confirmar_atracacao)
 
+#DESATRACAÇÃO
 
+    loading_desatracacao = ft.ProgressRing(visible=False, width=20, height=20)
+    imo_desatracacao = None
+    tipo_desatracacao = None
+
+    def processar_desatracacao_backend():
+        dialogo_confirmar_desatracacao.open = False
+        loading_desatracacao.visible = True
+        page.update()
+
+        def worker():
+            msg = ""
+            status_cor = ft.Colors.RED
+            try:
+                with Session(engine) as session:
+                    from controller_operacao import registrar_desatracacao
+                    
+                    if tipo_desatracacao == "INDIVIDUAL":
+                
+
+                        registrar_desatracacao(session, imo_desatracacao)
+                        msg = f"Navio {imo_desatracacao} desatracado com sucesso!"
+                        status_cor = ft.Colors.GREEN
+                    
+                    elif tipo_desatracacao == "MASSA":
+                        
+
+                        from cad import Vaga, StatusVaga
+                        vagas_ocupadas = session.query(Vaga).filter(Vaga.status == StatusVaga.OCUPADA).all()
+                        
+                        sucesso_count = 0
+                        for vaga in vagas_ocupadas:
+                            if vaga.navio and hasattr(vaga.navio, "imo_id"):
+                                registrar_desatracacao(session, vaga.navio.imo_id)
+                                sucesso_count += 1
+                        
+                        if sucesso_count > 0:
+                            msg = f"Operação em massa concluída! {sucesso_count} navio(s) liberado(s)."
+                            status_cor = ft.Colors.GREEN
+                        else:
+                            msg = "Nenhum navio atracado encontrado para liberar."
+                            status_cor = ft.Colors.ORANGE
+                            
+                    session.commit()
+            except Exception as err:
+                msg = f"Erro na operação de desatracação: {err}"
+            finally:
+                def finalizar_ui():
+                    loading_desatracacao.visible = False
+                    page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=status_cor)
+                    page.snack_bar.open = True
+                    carregar_dados()
+                    page.update()
+                page.call_later(finalizar_ui)
+
+        Thread(target=worker).start()
+
+    txt_msg_desatracacao = ft.Text("")
+    
+    def fechar_modal_desatracacao(e):
+        dialogo_confirmar_desatracacao.open = False
+        page.update()
+
+    def abrir_confirmacao_desatracacao(tipo, imo=None):
+        nonlocal tipo_desatracacao, imo_desatracacao
+        tipo_desatracacao = tipo
+        imo_desatracacao = imo
+        
+        if tipo == "INDIVIDUAL":
+            txt_msg_desatracacao.value = f"Deseja destracar navio {imo} e liberar este berço?"
+        else:
+            txt_msg_desatracacao.value = "ATENÇÃO: Deseja realmente desatracar TODOS os navios ativos de todos os berços ao mesmo tempo?"
+            
+        dialogo_confirmar_desatracacao.open = True
+        page.update()
+
+    dialogo_confirmar_desatracacao = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("Confirmar Liberação de Berço"),
+        content=txt_msg_desatracacao,
+        actions=[
+            ft.TextButton("Confirmar Saída", on_click=lambda e: processar_desatracacao_backend()),
+            ft.TextButton("Cancelar", on_click=fechar_modal_desatracacao),
+        ],
+    )
+    page.overlay.append(dialogo_confirmar_desatracacao)
+
+    
     # =============== DADOS FICTÍCIOS E GRÁFICO (VERSÃO ESTÁVEL) ===============
     hoje = datetime.now()
     dias_semana = [(hoje - timedelta(days=i)).strftime("%d/%m") for i in range(6, -1, -1)]
