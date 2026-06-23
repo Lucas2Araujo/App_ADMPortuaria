@@ -5,6 +5,7 @@ Este módulo processa a movimentação de navios, atracação em vagas livres e
 a geração de histórico (logs) das operações em tempo real.
 """
 
+from typing import Optional
 from datetime import datetime
 from sqlalchemy.orm import joinedload
 from cad import Vaga, Atracacao, StatusVaga, StatusNavio, Navio

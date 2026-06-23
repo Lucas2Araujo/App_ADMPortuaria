@@ -46,7 +46,7 @@ jobs:
         run: pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
 
       - name: 🎨 Compilar GUI com Flet Pack
-        run: flet pack src/gui/main_gui.py --name ${{ matrix.gui_artifact_name }}
+        run: flet pack -y src/gui/main_gui.py --name ${{ matrix.gui_artifact_name }}
 
       - name: 🌐 Compilar Web (Apenas Linux)
         if: matrix.os == 'ubuntu-latest'
