@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
 from cad import Base, Navio
 import app
 
@@ -11,7 +11,8 @@ class TestCLIApp(unittest.TestCase):
         # 1. Cria um banco SQLite apenas na memória RAM (ultrarrápido e descartável)
         self.engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(self.engine)
-        self.session = Session(self.engine)
+        SessionFactory = sessionmaker(bind=self.engine)
+        self.session = SessionFactory()
 
     def tearDown(self):
         self.session.close()

@@ -19,13 +19,21 @@ Nesta seção, encontram-se os diagramas estruturais e comportamentais (PlantUML
 ## Diagramas de Sequencia
 
 ### Diagrama de Sequencia 1
-![Diagrama de Sequencia](Diagramas/Imagens/Sequencia_1.png)
+![Diagrama de Sequencia 1](Diagramas/Imagens/Diagramadesequencia1.png)
 
 ### Diagrama de Sequencia 2
-![Diagrama de Sequencia](Diagramas/Imagens/Sequencia_2.png)
+![Diagrama de Sequencia 2](Diagramas/Imagens/Diagramadesequencia2.png)
 
 ### Diagrama de Sequencia 3
-![Diagrama de Sequencia](Diagramas/Imagens/Sequencia_3.png)
+![Diagrama de Sequencia 3](Diagramas/Imagens/DiagramadeSequencia3.png)
+
+### Diagramas de Sequência — Interface Gráfica (GUI)
+
+#### Sequência GUI 1: Inicialização e Navegação no Painel do Administrador
+![Diagrama de Sequência GUI 1](Diagramas/Imagens/DiagramaDeSequenciaGUi1.png)
+
+#### Sequência GUI 2: Portal da Tripulação e Visualização da Fila
+![Diagrama de Sequência GUI 2](Diagramas/Imagens/DiagramaDeSequenciaGUi2.png)
 
 ## Diagrama de Estados
 ![Diagrama de Estados](Diagramas/Imagens/Estados.png)

@@ -5,16 +5,15 @@ Este módulo processa a movimentação de navios, atracação em vagas livres e
 a geração de histórico (logs) das operações em tempo real.
 """
 
+from typing import Optional
 from datetime import datetime
+from sqlalchemy.orm import joinedload
 from cad import Vaga, Atracacao, StatusVaga, StatusNavio, Navio
 from ord_propriety import obter_proximo_da_fila
-
-cor_verde = "\033[92m"
-cor_vermelha = "\033[91m"
-reset = "\033[0m"
+from dto import OperacaoLogDTO, VagaDTO
 
 
-def atracar_navio(session):
+def atracar_navio(session) -> Optional[OperacaoLogDTO]:
     """
     Busca o próximo navio da fila e o aloca na primeira vaga disponível.
     Altera o status do navio, da vaga e gera o histórico de atracação.
@@ -23,16 +22,14 @@ def atracar_navio(session):
         session (Session): Sessão ativa do SQLAlchemy conectada ao banco de dados.
 
     Returns:
-        Atracacao | None: O objeto `Atracacao` recém-registrado, ou `None` se a atracação falhar.
+        OperacaoLogDTO | None: O log da atracação recém-registrada, ou `None` se falhar.
     """
     navio = obter_proximo_da_fila(session)
     if not navio:
-        print("Nenhum navio aguardando na fila com status VALIDADO.")
         return None
 
     vaga = session.query(Vaga).filter(Vaga.status == StatusVaga.LIVRE).first()
     if not vaga:
-        print("Nenhuma vaga livre no momento para atracação.")
         return None
 
     navio.status = StatusNavio.ATRACADO
@@ -45,13 +42,16 @@ def atracar_navio(session):
     session.add(nova_atracacao)
     session.commit()
 
-    print(
-        f"Navio {navio.imo_id} ('{navio.nome}') atracado na Vaga {vaga.id} com sucesso."
+    return OperacaoLogDTO(
+        id=nova_atracacao.id,
+        tipo="ATRACAO",
+        navio_imo_id=nova_atracacao.navio_imo_id,
+        vaga_id=nova_atracacao.vaga_id,
+        data_hora=nova_atracacao.data_hora_inicio
     )
-    return nova_atracacao
 
 
-def registrar_desatracacao(session, imo_id: str):
+def registrar_desatracacao(session, imo_id: str) -> Optional[OperacaoLogDTO]:
     """
     Busca a atracação em aberto para o navio, registra o fim da operação
     e libera a vaga, mudando o status do navio para finalizado.
@@ -61,7 +61,7 @@ def registrar_desatracacao(session, imo_id: str):
         imo_id (str): O código IMO do navio que deve realizar a desatracação.
 
     Returns:
-        Atracacao | None: O objeto `Atracacao` finalizado, ou `None` caso não encontre atracação ativa.
+        OperacaoLogDTO | None: O log finalizado, ou `None` caso não encontre atracação ativa.
     """
     atracacao = (
         session.query(Atracacao)
@@ -70,7 +70,6 @@ def registrar_desatracacao(session, imo_id: str):
     )
 
     if not atracacao:
-        print(f"Não há atracação ativa (em aberto) para o navio {imo_id}.")
         return None
 
     atracacao.data_hora_fim = datetime.now()
@@ -85,86 +84,23 @@ def registrar_desatracacao(session, imo_id: str):
 
     session.commit()
 
-    print(
-        f"Desatracação do navio {imo_id} registrada. Vaga {atracacao.vaga_id} agora está LIVRE."
-    )
-    return atracacao
-
-
-def _imprimir_cabecalho_dashboard(total_vagas, vagas_livres, vagas_ocupadas):
-    """
-    Imprime o cabeçalho formatado para o dashboard de vagas.
-
-    Args:
-        total_vagas (int): Número total de vagas cadastradas.
-        vagas_livres (int): Número de vagas atualmente livres.
-        vagas_ocupadas (int): Número de vagas atualmente ocupadas.
-    """
-    print("\n" + "=" * 70)
-    print("DASHBOARD DO PORTO - STATUS DAS VAGAS")
-    print(
-        f"Total: {total_vagas} | Disponíveis: {vagas_livres} | Ocupadas: {vagas_ocupadas}"
-    )
-    print("=" * 70)
-
-
-def _imprimir_detalhe_vaga(
-    vaga, mapa_atracacoes, mapa_navios, cor_verde, cor_vermelha, reset
-):
-    """
-    Imprime os detalhes de uma única vaga, indicando seu status e, se ocupada,
-    o navio correspondente.
-
-    Args:
-        vaga (Vaga): Objeto da vaga a ser exibida.
-        mapa_atracacoes (dict): Dicionário mapeando ID da vaga para o objeto Atracacao ativa.
-        mapa_navios (dict): Dicionário mapeando IMO do navio para o objeto Navio.
-        cor_verde (str): Código ANSI para cor verde.
-        cor_vermelha (str): Código ANSI para cor vermelha.
-        reset(str): Código ANSI para resetar a cor do terminal.
-    """
-    if vaga.status != StatusVaga.OCUPADA:
-        print(f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {cor_verde}[LIVRE]{reset}")
-        return
-
-    atracacao = mapa_atracacoes.get(vaga.id)
-    if not atracacao:
-        print(
-            f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {cor_vermelha}[OCUPADA]{reset} -> (Sem atracação ativa registrada)"
-        )
-        return
-
-    navio = mapa_navios.get(atracacao.navio_imo_id)
-    nome_navio = navio.nome if navio else "Desconhecido"
-    data_inicio = (
-        atracacao.data_hora_inicio.strftime("%Y-%m-%d %H:%M:%S")
-        if atracacao.data_hora_inicio
-        else "N/A"
-    )
-    print(
-        f"Vaga {vaga.id:<2} [{vaga.tipo_vaga}] - {cor_vermelha}[OCUPADA]{reset} -> Navio: {nome_navio} (IMO: {navio.imo_id}) - Atracado desde: {data_inicio}"
+    return OperacaoLogDTO(
+        id=atracacao.id,
+        tipo="DESATRACAO",
+        navio_imo_id=atracacao.navio_imo_id,
+        vaga_id=atracacao.vaga_id,
+        data_hora=atracacao.data_hora_fim
     )
 
 
-def exibir_painel_vagas(session):
+def obter_painel_vagas_dto(session) -> list[VagaDTO]:
     """
-    Exibe o painel atualizado com todas as vagas cadastradas.
-    Mostra qual navio está ocupando a vaga, caso não esteja livre.
-
-    Args:
-        session (Session): Sessão ativa do banco de dados.
+    Retorna uma lista de DTOs contendo o status de cada vaga e o navio
+    atracado nela, se houver.
     """
     vagas = session.query(Vaga).all()
-
     if not vagas:
-        print("Nenhuma vaga cadastrada no sistema.")
-        return
-
-    total_vagas = len(vagas)
-    vagas_livres = sum(1 for v in vagas if v.status == StatusVaga.LIVRE)
-    vagas_ocupadas = total_vagas - vagas_livres
-
-    _imprimir_cabecalho_dashboard(total_vagas, vagas_livres, vagas_ocupadas)
+        return []
 
     atracacoes_ativas = (
         session.query(Atracacao).filter(Atracacao.data_hora_fim.is_(None)).all()
@@ -173,72 +109,127 @@ def exibir_painel_vagas(session):
     imos_ativos = [a.navio_imo_id for a in atracacoes_ativas]
 
     navios = (
-        session.query(Navio).filter(Navio.imo_id.in_(imos_ativos)).all()
+        session.query(Navio)
+        .options(joinedload(Navio.cargas))
+        .filter(Navio.imo_id.in_(imos_ativos))
+        .all()
         if imos_ativos
         else []
     )
     mapa_navios = {n.imo_id: n for n in navios}
 
+    vagas_dto = []
     for vaga in vagas:
-        _imprimir_detalhe_vaga(
-            vaga, mapa_atracacoes, mapa_navios, cor_verde, cor_vermelha, reset
-        )
+        if vaga.status == StatusVaga.OCUPADA:
+            atracacao = mapa_atracacoes.get(vaga.id)
+            if atracacao:
+                navio = mapa_navios.get(atracacao.navio_imo_id)
+                navio_dto = navio.to_dto() if navio else None
+                vagas_dto.append(vaga.to_dto(navio_atracado=navio_dto, data_hora_inicio=atracacao.data_hora_inicio))
+            else:
+                vagas_dto.append(vaga.to_dto())
+        else:
+            vagas_dto.append(vaga.to_dto())
+
+    return vagas_dto
 
 
-def exibir_log_operacoes(session):
+def obter_log_operacoes_dto(session) -> list[OperacaoLogDTO]:
     """
-    Busca e exibe o histórico cronológico de todas as atracações e desatracações
-    que ocorreram no porto.
-
-    Args:
-        session (Session): Sessão ativa do banco de dados.
+    Retorna a lista cronológica de eventos de operações ocorridos no porto.
     """
-    print(f"\n{'--- LOG DE OPERAÇÕES (HISTÓRICO) ---'}")
-    atracacoes = session.query(Atracacao).all()
-
-    if not atracacoes:
-        print("Nenhuma operação registrada no histórico.")
-        return
-
+    atracacoes = (
+        session.query(Atracacao, Navio.nome)
+        .outerjoin(Navio, Atracacao.navio_imo_id == Navio.imo_id)
+        .all()
+    )
     eventos = []
-    for op in atracacoes:
+
+    for op, nome in atracacoes:
         eventos.append(
-            {
-                "id": op.id,
-                "tipo": "ATRACAO",
-                "navio_imo_id": op.navio_imo_id,
-                "vaga_id": op.vaga_id,
-                "data_hora": op.data_hora_inicio,
-            }
+            OperacaoLogDTO(
+                id=op.id,
+                tipo="ATRACAO",
+                navio_imo_id=op.navio_imo_id,
+                navio_nome=nome or "Desconhecido",
+                vaga_id=op.vaga_id,
+                data_hora=op.data_hora_inicio,
+            )
         )
         if op.data_hora_fim:
             eventos.append(
-                {
-                    "id": op.id,
-                    "tipo": "DESATRACAO",
-                    "navio_imo_id": op.navio_imo_id,
-                    "vaga_id": op.vaga_id,
-                    "data_hora": op.data_hora_fim,
-                }
+                OperacaoLogDTO(
+                    id=op.id,
+                    tipo="DESATRACAO",
+                    navio_imo_id=op.navio_imo_id,
+                    navio_nome=nome or "Desconhecido",
+                    vaga_id=op.vaga_id,
+                    data_hora=op.data_hora_fim,
+                )
             )
 
-    eventos.sort(key=lambda x: x["data_hora"], reverse=True)
+    eventos.sort(key=lambda x: x.data_hora, reverse=True)
+    return eventos
 
-    print(
-        f"{'DATA/HORA':<20} | {'EVENTO':<16} | {'NAVIO (IMO)':<15} | {'VAGA':<7} | {'OP ID'}"
-    )
-    print("-" * 77)
-    for ev in eventos:
-        data_str = ev["data_hora"].strftime("%Y-%m-%d %H:%M:%S")
-        imo = ev["navio_imo_id"]
-        vaga = ev["vaga_id"]
-        op_id = ev["id"]
 
-        if ev["tipo"] == "ATRACAO":
-            evento_str = f"{cor_verde}{'[+] ATRACAÇÃO':<16}{reset}"
-        else:
-            evento_str = f"{cor_vermelha}{'[-] DESATRACAÇÃO':<16}{reset}"
-
-        print(
-            f"{data_str:<20} | {evento_str} | {imo:<15} | Vaga {vaga:<2} | OP-{op_id:03d}"
+def obter_contagem_atracacoes_dia(session, dias: int = 7) -> dict[str, int]:
+    """
+    Retorna a contagem de atracações por dia para os últimos `dias`.
+    """
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    hoje_date = datetime.now().date()
+    resultados_grafico = (
+        session.query(
+            func.date(Atracacao.data_hora_inicio).label("dia"),
+            func.count().label("total"),
         )
+        .filter(
+            func.date(Atracacao.data_hora_inicio)
+            >= (hoje_date - timedelta(days=dias-1)).isoformat()
+        )
+        .group_by(func.date(Atracacao.data_hora_inicio))
+        .all()
+    )
+    return {row.dia: row.total for row in resultados_grafico}
+
+
+def liberar_vaga_individual(session, vaga_id: int):
+    """
+    Libera uma vaga específica, desatracando o navio atual se houver.
+    """
+    vaga = session.query(Vaga).filter(Vaga.id == vaga_id).first()
+    if vaga and vaga.status == StatusVaga.OCUPADA:
+        atracacao = session.query(Atracacao).filter(
+            Atracacao.vaga_id == vaga.id,
+            Atracacao.data_hora_fim.is_(None)
+        ).first()
+        if atracacao:
+            atracacao.data_hora_fim = datetime.now()
+            navio = session.query(Navio).filter(Navio.imo_id == atracacao.navio_imo_id).first()
+            if navio:
+                navio.status = StatusNavio.FINALIZADO
+        vaga.status = StatusVaga.LIVRE
+        session.commit()
+
+
+def obter_contadores_dashboard(session) -> dict:
+    """
+    Retorna estatísticas rápidas sobre vagas e navios.
+    """
+    total_vagas = session.query(Vaga).count()
+    vagas_ocupadas = session.query(Vaga).filter(Vaga.status == StatusVaga.OCUPADA).count()
+    vagas_livres = total_vagas - vagas_ocupadas
+    total_validado = session.query(Navio).filter(Navio.status == StatusNavio.VALIDADO).count()
+    total_pendente = session.query(Navio).filter(Navio.status == StatusNavio.PENDENTE).count()
+    total_finalizado = session.query(Navio).filter(Navio.status == StatusNavio.FINALIZADO).count()
+    return {
+        "vagas_livres": vagas_livres,
+        "total_vagas": total_vagas,
+        "total_validado": total_validado,
+        "total_pendente": total_pendente,
+        "total_finalizado": total_finalizado
+    }
+
+
+

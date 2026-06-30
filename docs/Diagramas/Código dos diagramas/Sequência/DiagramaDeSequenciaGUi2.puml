@@ -1,0 +1,49 @@
+@startuml
+title Interação da GUI: Processar Fila e Atracar
+autonumber
+
+actor "Administrador\n(Usuário)" as admin
+participant "FilaView\n(GUI Flet)" as gui
+participant "ControladorOperacao\n(Serviço)" as operacao
+participant "ord_propriety\n(Motor de Fila)" as fila
+database "Banco de Dados\n(SQLite)" as db
+
+admin -> gui : Clica em "Atracar Próximo Navio"
+activate gui
+
+gui -> operacao : atracar_navio(session)
+activate operacao
+
+operacao -> fila : obter_proximo_da_fila(session)
+activate fila
+fila -> db : Executa Subquery de Score (Perecibilidade + Tempo)
+db --> fila : Retorna Navio com maior score (VALIDADO)
+fila --> operacao : Retorna objeto Navio prioritário
+deactivate fila
+
+alt Nenhum navio na fila
+    operacao --> gui : Retorna None
+    gui --> admin : Exibe Alerta ("Nenhum navio VALIDADO na fila.")
+else Navio encontrado
+    operacao -> db : Busca primeira Vaga LIVRE
+    db --> operacao : Retorna objeto Vaga
+    
+    alt Nenhuma vaga livre
+        operacao --> gui : Retorna None
+        gui --> admin : Exibe Alerta ("Nenhuma vaga disponível no porto.")
+    else Vaga encontrada
+        operacao -> db : Atualiza Status (Navio=ATRACADO, Vaga=OCUPADA)
+        operacao -> db : Registra nova Atracacao()
+        db --> operacao : session.commit() OK
+        
+        operacao --> gui : Retorna objeto Atracacao
+        
+        gui -> gui : Atualiza tabelas/dashboards na tela (Flet update)
+        gui --> admin : Exibe Sucesso ("Navio atracado na vaga X")
+    end
+end
+
+deactivate operacao
+deactivate gui
+
+@enduml

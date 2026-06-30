@@ -2,21 +2,9 @@ import os
 import sys
 import flet as ft
 from threading import Thread
-from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
+from cad import obter_sessao
+from ord_propriety import obter_fila_atracacao_dto
 
-# Ajuste de caminhos idêntico aos outros painéis para não quebrar os imports
-diretorio_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if diretorio_src not in sys.path:
-    sys.path.append(diretorio_src)
-
-from cad import Navio, StatusNavio
-from ord_propriety import calcular_score
-from sqlalchemy.orm import Session, joinedload
-
-# Configuração de conexão com o Banco de Dados correto na raiz
-db_path = os.path.join(diretorio_src, "porto.db")
-engine = create_engine(f"sqlite:///{db_path}")
 
 
 def obter_view(page: ft.Page):
@@ -40,14 +28,23 @@ def obter_view(page: ft.Page):
         visible=False,
     )
 
+    def fechar_dialogo(e):
+        dialogo_detalhes.open = False
+        page.update()
+
+    dialogo_detalhes = ft.AlertDialog(
+        actions=[
+            ft.TextButton("Fechar Janela", on_click=fechar_dialogo),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+        on_dismiss=fechar_dialogo,
+    )
+    page.overlay.append(dialogo_detalhes)
+
     def abrir_detalhes_navio(navio, posicao):
         print(
             f"[DEBUG] Gerando ficha técnica do navio {navio.nome} (Posição: {posicao})..."
         )
-
-        def fechar_dialogo(e):
-            dlg.open = False
-            page.update()
 
         # Cálculo dinâmico extraindo dados dos relacionamentos 'cargas'
         capitao = getattr(
@@ -73,7 +70,7 @@ def obter_view(page: ft.Page):
             if (navio.cargas and any(c.eh_perecivel for c in navio.cargas))
             else "Não"
         )
-        score = f"{calcular_score(navio):.2f}"
+        score = f"{navio.score:.2f}"
 
         # Função auxiliar para criar linhas com "justify between" e ícones
         def criar_linha(icone, rotulo, valor, destaque=False):
@@ -105,85 +102,44 @@ def obter_view(page: ft.Page):
                 vertical_alignment=ft.CrossAxisAlignment.START,
             )
 
-        dlg = ft.AlertDialog(
-            title=ft.Row(
-                [
-                    ft.Icon(ft.Icons.DIRECTIONS_BOAT, color=ft.Colors.BLUE_700),
-                    ft.Text(
-                        f"Ficha Técnica — Fila #{posicao}", weight=ft.FontWeight.BOLD
-                    ),
-                ],
-                spacing=10,
-            ),
-            content=ft.Container(
-                width=500,  # Aumentei um pouco a largura para a divisão ficar elegante
-                content=ft.Column(
-                    [
-                        ft.Divider(height=10),
-                        criar_linha(
-                            ft.Icons.DIRECTIONS_BOAT_OUTLINED,
-                            "Nome da Embarcação:",
-                            navio.nome,
-                            destaque=True,
-                        ),
-                        criar_linha(ft.Icons.NUMBERS, "Código IMO ID:", navio.imo_id),
-                        criar_linha(
-                            ft.Icons.PERSON_OUTLINE, "Capitão Responsável:", capitao
-                        ),
-                        criar_linha(
-                            ft.Icons.BUSINESS, "Companhia / Armador:", navio.companhia
-                        ),
-                        criar_linha(ft.Icons.SCALE, "Peso Declarado:", peso),
-                        criar_linha(
-                            ft.Icons.CATEGORY_OUTLINED,
-                            "Categoria Logística:",
-                            categoria,
-                        ),
-                        criar_linha(
-                            ft.Icons.DESCRIPTION_OUTLINED,
-                            "Manifesto de Carga:",
-                            carga_desc,
-                        ),
-                        criar_linha(ft.Icons.AC_UNIT, "Carga Perecível:", perecivel),
-                        criar_linha(
-                            ft.Icons.ASSIGNMENT_TURNED_IN_OUTLINED,
-                            "Doc. Alfandegária:",
-                            documentos,
-                        ),
-                        ft.Divider(height=10),
-                        criar_linha(
-                            ft.Icons.STARS, "Score Atual de Fila:", score, destaque=True
-                        ),
-                    ],
-                    tight=True,
-                    spacing=12,
-                ),
-            ),
-            actions=[
-                ft.TextButton("Fechar Janela", on_click=fechar_dialogo),
+        dialogo_detalhes.title = ft.Row(
+            [
+                ft.Icon(ft.Icons.DIRECTIONS_BOAT, color=ft.Colors.BLUE_700),
+                ft.Text(f"Ficha Técnica — Fila #{posicao}", weight=ft.FontWeight.BOLD),
             ],
-            actions_alignment=ft.MainAxisAlignment.END,
+            spacing=10,
+        )
+        dialogo_detalhes.content = ft.Container(
+            width=500,
+            content=ft.Column(
+                [
+                    ft.Divider(height=10),
+                    criar_linha(ft.Icons.DIRECTIONS_BOAT_OUTLINED, "Nome da Embarcação:", navio.nome, destaque=True),
+                    criar_linha(ft.Icons.NUMBERS, "Código IMO ID:", navio.imo_id),
+                    criar_linha(ft.Icons.PERSON_OUTLINE, "Capitão Responsável:", capitao),
+                    criar_linha(ft.Icons.BUSINESS, "Companhia / Armador:", navio.companhia),
+                    criar_linha(ft.Icons.SCALE, "Peso Declarado:", peso),
+                    criar_linha(ft.Icons.CATEGORY_OUTLINED, "Categoria Logística:", categoria),
+                    criar_linha(ft.Icons.DESCRIPTION_OUTLINED, "Manifesto de Carga:", carga_desc),
+                    criar_linha(ft.Icons.AC_UNIT, "Carga Perecível:", perecivel),
+                    criar_linha(ft.Icons.ASSIGNMENT_TURNED_IN_OUTLINED, "Doc. Alfandegária:", documentos),
+                    ft.Divider(height=10),
+                    criar_linha(ft.Icons.STARS, "Score Atual de Fila:", score, destaque=True),
+                ],
+                tight=True,
+                spacing=12,
+            ),
         )
 
-        page.dialog = dlg
-        if dlg not in page.overlay:
-            page.overlay.append(dlg)
-
-        dlg.open = True
+        dialogo_detalhes.open = True
         page.update()
 
     def carregar_dados_fila(e=None, sync=False):
         """Busca os navios validados no banco e monta as linhas da tabela ordenadas."""
         def worker():
             try:
-                with Session(engine) as session:
-                    query = (
-                        session.query(Navio)
-                        .options(joinedload(Navio.cargas))
-                        .filter(Navio.status == StatusNavio.VALIDADO)
-                    )
-                    navios = query.all()
-                    navios.sort(key=calcular_score, reverse=True)
+                with obter_sessao() as session:
+                    navios = obter_fila_atracacao_dto(session)
 
                     novas_linhas = []
 
@@ -227,7 +183,7 @@ def obter_view(page: ft.Page):
                                         ft.DataCell(
                                             ft.Text(
                                                 f"{posicao}º", weight=ft.FontWeight.BOLD
-                                            )
+                                             )
                                         ),
                                         ft.DataCell(
                                             ft.Container(
@@ -241,8 +197,15 @@ def obter_view(page: ft.Page):
                                             )
                                         ),
                                         ft.DataCell(
-                                            ft.Text(
-                                                obs_texto, color=ft.Colors.BLUE_GREY_700
+                                            ft.Container(
+                                                content=ft.Text(
+                                                    obs_texto,
+                                                    overflow=ft.TextOverflow.ELLIPSIS,
+                                                    max_lines=1,
+                                                    color=ft.Colors.BLUE_GREY_700,
+                                                ),
+                                                width=350,
+                                                tooltip=obs_texto,
                                             )
                                         ),
                                         ft.DataCell(btn_ver_mais),
@@ -310,6 +273,8 @@ def obter_view(page: ft.Page):
         while True:
             time.sleep(2)
             if not container_fila.page:
+                break
+            if getattr(page, "active_tab", None) != "fila":
                 break
             try:
                 carregar_dados_fila(sync=False)

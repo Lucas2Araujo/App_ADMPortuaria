@@ -1,0 +1,36 @@
+@startuml
+title Interação da GUI: Solicitar Pré-Cadastro
+autonumber
+skinparam maxMessageSize 150
+
+actor "Capitão\n(Usuário)" as user
+participant "PainelTripulacao\n(GUI Flet)" as gui
+participant "ControladorCadastros\n(Serviço)" as controller
+database "Banco de Dados\n(SQLite)" as db
+
+user -> gui : Preenche formulário (IMO, Nome, Carga, etc.)
+user -> gui : Clica em "Solicitar Pré-Cadastro"
+
+activate gui
+gui -> gui : Valida campos em branco na interface
+
+alt Campos inválidos
+    gui --> user : Exibe SnackBar ("Preencha todos os campos")
+else Dados válidos
+    gui -> controller : solicitar_pre_cadastro(imo, nome, capitao, ..., possui_docs)
+    activate controller
+    
+    controller -> db : Cria instâncias Navio(PENDENTE) e Carga
+    activate db
+    db --> controller : session.commit() OK
+    deactivate db
+    
+    controller --> gui : Retorna objeto Navio criado
+    deactivate controller
+    
+    gui -> gui : Limpa formulário da tela
+    gui --> user : Exibe Banner de Sucesso ("Pré-cadastro realizado!")
+end
+deactivate gui
+
+@enduml

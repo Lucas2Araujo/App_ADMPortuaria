@@ -1,7 +1,8 @@
 import enum
+import os
 from datetime import datetime
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime, Enum
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, Session
+from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime, Enum, create_engine
 from typing import List, Optional, Tuple
 
 
@@ -59,6 +60,19 @@ class Navio(Base):
     def __repr__(self) -> str:
         return f"Navio(imo_id={self.imo_id!r}, capitão={self.nome_capitao!r}, companhia={self.companhia!r})"
 
+    def to_dto(self, score: float = 0.0) -> "NavioDTO":
+        from dto import NavioDTO
+        return NavioDTO(
+            imo_id=self.imo_id,
+            nome=self.nome,
+            nome_capitao=self.nome_capitao,
+            companhia=self.companhia,
+            status=self.status.value,
+            data_solicitacao=self.data_solicitacao,
+            cargas=[c.to_dto() for c in self.cargas],
+            score=score
+        )
+
 
 class Carga(Base):
     __tablename__ = "cargas"
@@ -73,6 +87,17 @@ class Carga(Base):
 
     navio: Mapped["Navio"] = relationship(back_populates="cargas")
 
+    def to_dto(self) -> "CargaDTO":
+        from dto import CargaDTO
+        return CargaDTO(
+            id=self.id,
+            descricao=self.descricao,
+            categoria=self.categoria,
+            quantidade_toneladas=self.quantidade_toneladas,
+            eh_perecivel=self.eh_perecivel,
+            documento_alfandega=self.documento_alfandega
+        )
+
 
 class Vaga(Base):
     __tablename__ = "vagas"
@@ -82,6 +107,16 @@ class Vaga(Base):
     status: Mapped[StatusVaga] = mapped_column(
         Enum(StatusVaga), default=StatusVaga.LIVRE, index=True
     )
+
+    def to_dto(self, navio_atracado: Optional["NavioDTO"] = None, data_hora_inicio: Optional[datetime] = None) -> "VagaDTO":
+        from dto import VagaDTO
+        return VagaDTO(
+            id=self.id,
+            tipo_vaga=self.tipo_vaga,
+            status=self.status.value,
+            navio_atracado=navio_atracado,
+            data_hora_inicio=data_hora_inicio
+        )
 
 
 class Atracacao(Base):
@@ -94,3 +129,32 @@ class Atracacao(Base):
     data_hora_fim: Mapped[Optional[datetime]] = mapped_column(
         DateTime, nullable=True, index=True
     )
+
+
+# --- GERENCIAMENTO DE CONEXÕES CENTRALIZADO ---
+_engine = None
+_session_maker = None
+
+def inicializar_banco(db_path: str):
+    """Inicializa a engine global e cria as tabelas."""
+    global _engine, _session_maker
+    if _engine is None:
+        from sqlalchemy.pool import NullPool
+        _engine = create_engine(
+            f"sqlite:///{db_path}",
+            connect_args={"check_same_thread": False},
+            poolclass=NullPool
+        )
+        Base.metadata.create_all(_engine)
+        _session_maker = sessionmaker(bind=_engine)
+    return _engine
+
+def obter_sessao() -> Session:
+    """Retorna uma nova sessão de banco de dados ativa."""
+    global _session_maker
+    if _session_maker is None:
+        diretorio_src = os.path.dirname(os.path.abspath(__file__))
+        db_path = os.path.join(diretorio_src, "porto.db")
+        inicializar_banco(db_path)
+    return _session_maker()
+
