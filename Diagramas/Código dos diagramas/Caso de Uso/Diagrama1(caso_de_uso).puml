@@ -1,0 +1,21 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Tripulação do Navio" as Crew
+actor "Administrador do Porto" as Admin
+
+rectangle "Módulo: Autoatendimento e Cadastros" {
+  usecase "Solicitar Pré-Cadastro (Navio/Carga)" as UC_PreCadastro
+  usecase "Validar Solicitação de Descarga" as UC_ValidarDescarga
+  usecase "Manter Cadastro de Navios" as UC_CadastroNavio
+  usecase "Registrar Operação de Carga" as UC_RegCarga
+}
+
+Crew --> UC_PreCadastro
+Admin --> UC_ValidarDescarga
+Admin --> UC_CadastroNavio
+Admin --> UC_RegCarga
+
+UC_RegCarga ..> UC_CadastroNavio : <<include>>
+@enduml
