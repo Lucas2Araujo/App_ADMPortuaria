@@ -64,7 +64,7 @@ for _path in (_DIR_SRC, _DIR_GUI, _DIR_TELAS):
 import flet as ft
 
 # Importa a função de validação pura (não precisa de Page nem de banco)
-from painel_adm import validar_formulario_navio
+from gui.telas.painel_adm import validar_formulario_navio
 
 
 # ===========================================================================
@@ -402,7 +402,7 @@ class TestEstadoVisualControles:
         corretamente desativa o botão antes de chamar o backend.
         """
         # ARRANGE
-        btn_atracar = ft.ElevatedButton("Atracar Próximo", disabled=False)
+        btn_atracar = ft.Button("Atracar Próximo", disabled=False)
         loading = ft.ProgressRing(visible=False)
         operacao_executada = []  # lista mutável para capturar chamadas dentro do closure
 

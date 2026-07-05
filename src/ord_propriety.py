@@ -38,11 +38,11 @@ def calcular_score(navio: Navio) -> float:
         if carga.eh_perecivel and peso > maior_grau_perecivel:
             maior_grau_perecivel = peso
 
-    # Regra de Negócio: Bônus massivo escalonado para cargas perecíveis, garantindo que furem a fila com prioridade máxima.
+
     if maior_grau_perecivel > 0:
         score_total += 10000 * maior_grau_perecivel
 
-    # Regra Anti-Starvation: Bônus de espera no tempo para evitar a inanição na fila de atracação para navios com cargas comuns.
+
     if navio.data_solicitacao:
         tempo_espera = datetime.now() - navio.data_solicitacao
         horas_espera = tempo_espera.total_seconds() / 3600.0
@@ -59,7 +59,7 @@ def criar_subquery_score_cargas():
         Subquery: Expressão em SQLAlchemy Select otimizada para o banco SQLite contendo
         o ID do navio e a coluna virtual 'score_cargas'.
     """
-    # 1. Transforma o dicionário PESOS_CATEGORIA em uma instrução CASE no SQL
+
     peso_categoria = case(
         (Carga.categoria == "URGENTE_PERECIVEL", 3),
         (Carga.categoria == "ALTA_PERECIBILIDADE", 2),
@@ -73,7 +73,7 @@ def criar_subquery_score_cargas():
     maior_grau = func.max(grau_perecivel)
     bonus_perecivel = case((maior_grau > 0, maior_grau * 10000), else_=0)
 
-    # 2. Retorna a tabela virtual (Group By) que traz o ID do navio e o seu Score de Cargas já somado
+
     return (
         select(
             Carga.navio_imo_id.label("navio_imo_id"),
@@ -97,18 +97,18 @@ def obter_expressao_score_total(sq_cargas, agora):
     Returns:
         ColumnElement: A expressão algébrica em SQLAlchemy mesclando peso de cargas e espera na fila.
     """
-    # O SQLite calcula diferença de segundos de forma mais eficiente via UNIX Timestamps ('%s')
+
     segundos_espera = cast(func.strftime("%s", agora), Integer) - cast(
         func.strftime("%s", Navio.data_solicitacao), Integer
     )
     horas_espera = segundos_espera / 3600.0
     bonus_tempo = horas_espera * 1000
 
-    # Protege navios que não tenham cargas contra valores NULL usando func.coalesce
+
     return func.coalesce(sq_cargas.c.score_cargas, 0) + func.coalesce(bonus_tempo, 0)
 
 
-def obter_proximo_da_fila(session):
+async def obter_proximo_da_fila(session):
     """
     Obtém em tempo ótimo O(1) o navio que tem mais prioridade (Maior Score).
 
@@ -121,16 +121,17 @@ def obter_proximo_da_fila(session):
     sq = criar_subquery_score_cargas()
     score_total = obter_expressao_score_total(sq, datetime.now())
 
-    return (
-        session.query(Navio)
+    stmt = (
+        select(Navio)
         .outerjoin(sq, Navio.imo_id == sq.c.navio_imo_id)
         .filter(Navio.status == StatusNavio.VALIDADO)
         .order_by(score_total.desc())
-        .first()
     )
+    result = await session.execute(stmt)
+    return result.scalars().first()
 
 
-def obter_fila_atracacao_dto(session) -> list:
+async def obter_fila_atracacao_dto(session) -> list:
     """
     Obtém a lista ordenada de navios na fila (status VALIDADO) como DTOs.
     """
@@ -138,14 +139,16 @@ def obter_fila_atracacao_dto(session) -> list:
     sq = criar_subquery_score_cargas()
     score_total = obter_expressao_score_total(sq, agora)
 
-    resultados = (
-        session.query(Navio, score_total.label("score"))
+    stmt = (
+        select(Navio, score_total.label("score"))
         .options(joinedload(Navio.cargas))
         .outerjoin(sq, Navio.imo_id == sq.c.navio_imo_id)
         .filter(Navio.status == StatusNavio.VALIDADO)
         .order_by(score_total.desc())
-        .all()
     )
+    
+    result = await session.execute(stmt)
+    resultados = result.unique().all()
 
     return [navio.to_dto(score=float(score)) for navio, score in resultados]
 

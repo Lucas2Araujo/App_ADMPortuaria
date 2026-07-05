@@ -5,7 +5,7 @@ O **Fila de Atracação** é o painel público que exibe a ordem atual das embar
 ## Funcionalidades implementadas
 
 - **Fila de Atracação Dinâmica**: Tabela ordenada em tempo real pela pontuação de score de prioridade de cada navio.
-- **Auto-Atualização (Auto-Refresh)**: Loop em segundo plano que executa a cada 2 segundos atualizando a fila visual automaticamente sem exigir recarga manual de página.
+- **Auto-Atualização (Auto-Refresh)**: Loop em segundo plano executado via `page.run_task()` que aguarda de forma não-bloqueante (`await asyncio.sleep(2)`) e atualiza a fila visual automaticamente sem exigir recarga manual e sem travar a interface.
 - **Ficha Técnica Individual**: Ação de "Ver mais" que exibe em um popup/modal os detalhes técnicos da embarcação e suas respectivas cargas vinculadas (Capitão, Categoria, Manifesto de Carga, Perecibilidade, Documentos, Peso e Score).
 
 ## Critérios de Priorização

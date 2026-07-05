@@ -19,7 +19,7 @@ O **Portal da Tripulação** é a interface simplificada destinada aos capitães
 Ao enviar a declaração de chegada, a interface executa a função pura de validação `validar_formulario_navio`. Se nenhum erro for encontrado, chama o serviço `solicitar_pre_cadastro` da camada lógica:
 
 ```python
-solicitar_pre_cadastro(
+await solicitar_pre_cadastro(
     session=session,
     imo=imo_formatado,
     nome=nome_formatado,
@@ -32,5 +32,7 @@ solicitar_pre_cadastro(
     possui_documentos=possui_documentos,
 )
 ```
+
+> **Nota de Performance:** A comunicação com a base de dados agora é totalmente assíncrona (`await`). Isso significa que a interface não irá congelar enquanto o sistema aguarda a resposta do servidor/banco de dados.
 
 > **Nota:** Por padrão, todos os navios cadastrados remotamente são salvos no banco de dados com o status `PENDENTE`. Eles permanecem isolados e não ingressam na fila de atracação oficial até que um Administrador aprove a solicitação após a auditoria documental.

@@ -1,0 +1,119 @@
+<<<<<<< HEAD
+name: Compilar Executáveis e Criar Nova Release (CD)
+=======
+name: Release
+>>>>>>> 8843451fccfc2e17a09ce068f06eb8bb19bff4dd
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag da Versão (ex: v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      release_title:
+        description: 'Título da Release (ex: Sprint 2 - Versão Final)'
+        required: true
+        default: 'Sprint 2 - Versão Final'
+
+jobs:
+  build:
+    name: Compilar Executáveis
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: Adm_Porto
+            gui_artifact_name: Adm_Porto_GUI
+          - os: windows-latest
+            artifact_name: Adm_Porto.exe
+            gui_artifact_name: Adm_Porto_GUI.exe
+
+    steps:
+      - name: 📥 Clonar o Repositório
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 Instalar Dependências e PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r src/requirements.txt
+          pip install pyinstaller
+
+      - name: 🔨 Compilar CLI (app.py) com PyInstaller
+        shell: bash
+        run: |
+<<<<<<< HEAD
+          pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
+=======
+          pyinstaller --onefile --hidden-import=aiosqlite --name ${{ matrix.artifact_name }} src/app.py
+>>>>>>> 8843451fccfc2e17a09ce068f06eb8bb19bff4dd
+          mkdir -p bin_outputs
+          mv dist/${{ matrix.artifact_name }}* bin_outputs/
+
+      - name: 🎨 Compilar GUI (app_gui.py) com Flet Pack
+        shell: bash
+        run: |
+<<<<<<< HEAD
+          flet pack -y src/app_gui.py --name ${{ matrix.gui_artifact_name }}
+=======
+          flet pack -y src/app_gui.py --name ${{ matrix.gui_artifact_name }} --hidden-import aiosqlite
+>>>>>>> 8843451fccfc2e17a09ce068f06eb8bb19bff4dd
+          mkdir -p bin_outputs
+          mv dist/${{ matrix.gui_artifact_name }}* bin_outputs/
+
+      - name: 📤 Guardar Artefatos Temporariamente
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-outputs-${{ matrix.os }}
+          path: bin_outputs/
+
+  create_release:
+    name: Criar Release Oficial
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Clonar o Repositório
+        uses: actions/checkout@v4
+
+      - name: 📥 Baixar Binários Compilados
+        uses: actions/download-artifact@v4
+        with:
+          path: binarios_temp/
+
+      - name: 🔐 Gerar Hashes SHA-256 e Organizar Arquivos
+        run: |
+          mkdir arquivos_finais
+
+          mv binarios_temp/build-outputs-ubuntu-latest/Adm_Porto arquivos_finais/
+          mv binarios_temp/build-outputs-ubuntu-latest/Adm_Porto_GUI arquivos_finais/
+
+          mv binarios_temp/build-outputs-windows-latest/Adm_Porto.exe arquivos_finais/
+          mv binarios_temp/build-outputs-windows-latest/Adm_Porto_GUI.exe arquivos_finais/
+
+          cd arquivos_finais
+          sha256sum Adm_Porto Adm_Porto.exe Adm_Porto_GUI Adm_Porto_GUI.exe > checksums_oficiais.txt
+
+      - name: 🚀 Criar Nova Release e Fazer Upload dos Arquivos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd arquivos_finais
+          gh release create "${{ github.event.inputs.tag_name }}" \
+            Adm_Porto \
+            Adm_Porto.exe \
+            Adm_Porto_GUI \
+            Adm_Porto_GUI.exe \
+            checksums_oficiais.txt \
+            --title "${{ github.event.inputs.release_title }}" \
+            --notes "Release gerada automaticamente via GitHub Actions. Executáveis CLI e GUI (Windows/Linux) empacotados e verificados criptograficamente." \
+            --repo ${{ github.repository }}
