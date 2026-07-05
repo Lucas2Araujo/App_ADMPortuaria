@@ -1,8 +1,12 @@
+from dto import VagaDTO
+from dto import CargaDTO
+from dto import NavioDTO
 import enum
 import os
 from datetime import datetime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, Session
 from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime, Enum, create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from typing import List, Optional, Tuple
 
 
@@ -134,10 +138,12 @@ class Atracacao(Base):
 # --- GERENCIAMENTO DE CONEXÕES CENTRALIZADO ---
 _engine = None
 _session_maker = None
+_async_engine = None
+_async_session_maker = None
 
 def inicializar_banco(db_path: str):
     """Inicializa a engine global e cria as tabelas."""
-    global _engine, _session_maker
+    global _engine, _session_maker, _async_engine, _async_session_maker
     if _engine is None:
         from sqlalchemy.pool import NullPool
         _engine = create_engine(
@@ -147,6 +153,17 @@ def inicializar_banco(db_path: str):
         )
         Base.metadata.create_all(_engine)
         _session_maker = sessionmaker(bind=_engine)
+
+        _async_engine = create_async_engine(
+            f"sqlite+aiosqlite:///{db_path}",
+            connect_args={"check_same_thread": False},
+            poolclass=NullPool
+        )
+        _async_session_maker = async_sessionmaker(
+            bind=_async_engine,
+            class_=AsyncSession,
+            expire_on_commit=False
+        )
     return _engine
 
 def obter_sessao() -> Session:
@@ -157,4 +174,13 @@ def obter_sessao() -> Session:
         db_path = os.path.join(diretorio_src, "porto.db")
         inicializar_banco(db_path)
     return _session_maker()
+
+def obter_sessao_async() -> AsyncSession:
+    """Retorna uma nova sessão assíncrona de banco de dados."""
+    global _async_session_maker
+    if _async_session_maker is None:
+        diretorio_src = os.path.dirname(os.path.abspath(__file__))
+        db_path = os.path.join(diretorio_src, "porto.db")
+        inicializar_banco(db_path)
+    return _async_session_maker()
 

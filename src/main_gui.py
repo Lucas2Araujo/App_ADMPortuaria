@@ -6,14 +6,14 @@ diretorio_src = os.path.dirname(os.path.abspath(__file__))
 if diretorio_src not in sys.path:
     sys.path.append(diretorio_src)
 
-# Importando todas as views (telas) da pasta correspondente
+
 from gui.telas.painel_adm import obter_view as view_dashboard
 from gui.telas.fila_view import obter_view as view_fila
 from gui.telas.painel_tripulacao import obter_view as view_tripulacao
 
 
 def main(page: ft.Page):
-    # Garante que o banco e os berços padrão existam na primeira execução GUI/Web
+
     from cad import inicializar_banco, obter_sessao
     from pop_bd import gerar_vagas_iniciais
     db_path = os.path.join(diretorio_src, "porto.db")
@@ -37,7 +37,7 @@ def main(page: ft.Page):
             menu_lateral.bgcolor = ft.Colors.BLUE_GREY_50
         page.update()
 
-    # Botão Tema
+
     btn_tema = ft.IconButton(
         icon=ft.Icons.NIGHTS_STAY, icon_color=ft.Colors.WHITE, on_click=alternar_tema
     )
@@ -61,7 +61,7 @@ def main(page: ft.Page):
         except Exception as erro:
             print(f"Erro ao injetar navios: {erro}")
 
-    # Barra superior do sistema
+
     page.appbar = ft.AppBar(
         leading=ft.Icon(
             ft.Icons.DIRECTIONS_BOAT_FILLED, color=ft.Colors.BLUE_200, size=28
@@ -86,39 +86,90 @@ def main(page: ft.Page):
         ],
     )
 
-    # Função central de navegação
+
     def navegar_para(target: str):
         page.active_tab = target
-        # Limpa os modais/popups anteriores da memória para evitar sobreposição e bugs visuais
+
         page.overlay.clear()
 
+        novo_conteudo = None
+
         if target == "dashboard":
-            conteudo_principal.content = view_dashboard(page, "dashboard")
+            # Wrapper para animação da esquerda para direita
+            conteudo = view_dashboard(page, "dashboard")
+            novo_conteudo = ft.Container(
+                content=conteudo,
+                opacity=0,
+                offset=ft.Offset(-0.05, 0),
+                animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
+                animate_offset=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
+                expand=True,
+                key="dashboard_view" # Use key to force AnimatedSwitcher to see it as a new widget
+            )
             menu_lateral.selected_index = 0
         elif target == "vagas":
-            conteudo_principal.content = view_dashboard(page, "vagas")
+            novo_conteudo = view_dashboard(page, "vagas")
             menu_lateral.selected_index = 1
         elif target == "gerenciar":
-            conteudo_principal.content = view_dashboard(page, "gerenciar")
+            novo_conteudo = view_dashboard(page, "gerenciar")
             menu_lateral.selected_index = 2
         elif target == "auditoria":
-            conteudo_principal.content = view_dashboard(page, "auditoria")
+            novo_conteudo = view_dashboard(page, "auditoria")
             menu_lateral.selected_index = 3
         elif target == "fila":
-            conteudo_principal.content = view_fila(page)
+            novo_conteudo = view_fila(page)
             menu_lateral.selected_index = 4
         elif target == "tripulacao":
-            conteudo_principal.content = view_tripulacao(page)
+            novo_conteudo = view_tripulacao(page)
             menu_lateral.selected_index = 5
+            
+        # Ensure that other views have a key as well so AnimatedSwitcher works properly
+        if target != "dashboard" and isinstance(novo_conteudo, ft.Control):
+            # Wrap in a simple container to give it a key
+            novo_conteudo = ft.Container(content=novo_conteudo, key=target, expand=True)
+
+        conteudo_principal.content = novo_conteudo
         page.update()
 
-    # Inicializar conteúdo principal com a view do Dashboard
-    page.active_tab = "dashboard"
-    conteudo_principal = ft.Container(
-        content=view_dashboard(page, "dashboard"), expand=True
-    )
+        # Dispara a animação do dashboard após ele ter sido renderizado com opacidade 0
+        if target == "dashboard":
+            novo_conteudo.opacity = 1
+            novo_conteudo.offset = ft.Offset(0, 0)
+            page.update()
 
-    # Delegação de mudança pelo menu lateral
+
+    page.active_tab = "dashboard"
+    
+    # Inicia com o dashboard animado
+    dash_inicial = ft.Container(
+        content=view_dashboard(page, "dashboard"),
+        opacity=0,
+        offset=ft.Offset(-0.05, 0),
+        animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
+        animate_offset=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
+        expand=True,
+        key="dashboard_view_inicial"
+    )
+    
+    conteudo_principal = ft.AnimatedSwitcher(
+        content=dash_inicial,
+        transition=ft.AnimatedSwitcherTransition.FADE,
+        duration=400,
+        reverse_duration=400,
+        switch_in_curve=ft.AnimationCurve.EASE_IN,
+        switch_out_curve=ft.AnimationCurve.EASE_OUT,
+        expand=True
+    )
+    
+    # Agenda a animação inicial assim que a UI for montada
+    async def disparar_animacao_inicial(e=None):
+        dash_inicial.opacity = 1
+        dash_inicial.offset = ft.Offset(0, 0)
+        page.update()
+        
+    page.run_task(disparar_animacao_inicial)
+
+
     def mudar_tela(e):
         index = e.control.selected_index
         mapa_rotas = {
@@ -132,9 +183,9 @@ def main(page: ft.Page):
         if index in mapa_rotas:
             navegar_para(mapa_rotas[index])
 
-    # Menu Lateral Centralizado (Flat Navigation)
+
     menu_lateral = ft.NavigationRail(
-        selected_index=0,  # Inicia com Visão Geral
+        selected_index=0,
         label_type=ft.NavigationRailLabelType.ALL,
         extended=True,
         min_width=72,
@@ -176,8 +227,8 @@ def main(page: ft.Page):
         on_change=mudar_tela,
     )
 
-    # Adiciona layout à página
+
     page.add(ft.Row(controls=[menu_lateral, conteudo_principal], expand=True))
 
 
-ft.run(main)
+

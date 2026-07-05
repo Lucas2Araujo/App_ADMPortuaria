@@ -6,6 +6,7 @@ de navios, classificação de cargas e processos de auditoria documental.
 """
 
 from datetime import datetime
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from cad import Navio, Carga, StatusNavio
 from dto import NavioDTO
@@ -21,7 +22,7 @@ class CargaNaoClassificadaError(Exception):
         super().__init__(f"A carga '{carga_descricao}' (ID: {carga_id}) do navio {navio_nome} ({imo_id}) precisa de classificação.")
 
 
-def solicitar_pre_cadastro(
+async def solicitar_pre_cadastro(
     session,
     imo: str,
     nome: str,
@@ -55,21 +56,22 @@ def solicitar_pre_cadastro(
 
     novo_navio.cargas.append(nova_carga)
     session.add(novo_navio)
-    session.commit()
+    await session.commit()
 
     return novo_navio.to_dto()
 
 
-def classificar_carga(session, carga_id: int, categoria: str, eh_perecivel: bool):
+async def classificar_carga(session, carga_id: int, categoria: str, eh_perecivel: bool):
     """
     Classifica uma carga específica com a categoria e perecibilidade fornecidas.
     """
-    carga = session.query(Carga).filter(Carga.id == carga_id).first()
+    result = await session.execute(select(Carga).filter(Carga.id == carga_id))
+    carga = result.scalars().first()
     if not carga:
         raise ValueError("Carga não encontrada.")
     carga.categoria = categoria
     carga.eh_perecivel = eh_perecivel
-    session.commit()
+    await session.commit()
 
 
 def _auditar_documentacao_navio(navio):
@@ -82,18 +84,19 @@ def _auditar_documentacao_navio(navio):
         navio.status = StatusNavio.VALIDADO
 
 
-def auditar_solicitacoes_pendentes(session) -> list[NavioDTO]:
+async def auditar_solicitacoes_pendentes(session) -> list[NavioDTO]:
     """
     Audita todos os navios PENDENTES.
     Altera o status para VALIDADO ou REJEITADO baseado na documentação aduaneira.
     Se encontrar cargas não classificadas, lança CargaNaoClassificadaError para ser resolvido na camada superior.
     """
-    navios_pendentes = (
-        session.query(Navio)
+    stmt = (
+        select(Navio)
         .options(joinedload(Navio.cargas))
         .filter(Navio.status == StatusNavio.PENDENTE)
-        .all()
     )
+    result = await session.execute(stmt)
+    navios_pendentes = result.scalars().unique().all()
 
     if not navios_pendentes:
         return []
@@ -112,79 +115,84 @@ def auditar_solicitacoes_pendentes(session) -> list[NavioDTO]:
         _auditar_documentacao_navio(navio)
         auditos.append(navio.to_dto())
 
-    session.commit()
+    await session.commit()
     return auditos
 
 
-def excluir_registro_navio(session, imo_id: str):
+async def excluir_registro_navio(session, imo_id: str):
     """
     Exclui o registro de um navio e suas cargas associadas do banco de dados.
     """
-    navio = session.query(Navio).filter(Navio.imo_id == imo_id).first()
+    result = await session.execute(select(Navio).filter(Navio.imo_id == imo_id))
+    navio = result.scalars().first()
     if not navio:
         raise ValueError(f"Nenhum navio encontrado com o IMO ID '{imo_id}'.")
 
     if navio.status == StatusNavio.ATRACADO:
         raise ValueError(f"Não é possível excluir o navio '{navio.nome}' pois ele está atualmente ATRACADO.")
 
-    session.delete(navio)
-    session.commit()
+    await session.delete(navio)
+    await session.commit()
 
 
-def editar_registro_navio(session, imo_id: str, nome: str, capitao: str, companhia: str) -> NavioDTO:
+async def editar_registro_navio(session, imo_id: str, nome: str, capitao: str, companhia: str) -> NavioDTO:
     """
     Edita os dados cadastrais básicos de um navio.
     """
-    navio = session.query(Navio).filter(Navio.imo_id == imo_id).first()
+    result = await session.execute(select(Navio).filter(Navio.imo_id == imo_id))
+    navio = result.scalars().first()
     if not navio:
         raise ValueError("Navio não encontrado.")
     navio.nome = nome
     navio.nome_capitao = capitao
     navio.companhia = companhia
-    session.commit()
+    await session.commit()
     return navio.to_dto()
 
 
-def obter_solicitacoes_pendentes_dto(session) -> list[NavioDTO]:
+async def obter_solicitacoes_pendentes_dto(session) -> list[NavioDTO]:
     """
     Retorna uma lista de DTOs dos navios com status PENDENTE.
     """
-    pendentes = (
-        session.query(Navio)
+    stmt = (
+        select(Navio)
         .options(joinedload(Navio.cargas))
         .filter(Navio.status == StatusNavio.PENDENTE)
-        .all()
     )
+    result = await session.execute(stmt)
+    pendentes = result.scalars().unique().all()
     return [navio.to_dto() for navio in pendentes]
 
 
-def obter_todos_navios_dto(session) -> list[NavioDTO]:
+async def obter_todos_navios_dto(session) -> list[NavioDTO]:
     """
     Retorna todos os navios cadastrados como DTOs.
     """
-    navios = (
-        session.query(Navio)
+    stmt = (
+        select(Navio)
         .options(joinedload(Navio.cargas))
-        .all()
     )
+    result = await session.execute(stmt)
+    navios = result.scalars().unique().all()
     return [navio.to_dto() for navio in navios]
 
 
-def auditar_navio_individual(session, imo_id: str, acao: str) -> NavioDTO:
+async def auditar_navio_individual(session, imo_id: str, acao: str) -> NavioDTO:
     """
     Aprova ou rejeita uma solicitação individual de navio.
     """
-    navio = (
-        session.query(Navio)
+    stmt = (
+        select(Navio)
         .options(joinedload(Navio.cargas))
         .filter(Navio.imo_id == imo_id)
-        .first()
     )
+    result = await session.execute(stmt)
+    navio = result.scalars().first()
     if not navio:
         raise ValueError("Navio não encontrado.")
 
     if acao == "APROVAR":
-        # Regra de negócio: se tem documento de alfândega faltando em alguma carga, rejeita.
+
         if any(not c.documento_alfandega for c in navio.cargas):
             navio.status = StatusNavio.REJEITADO
         else:
@@ -192,7 +200,7 @@ def auditar_navio_individual(session, imo_id: str, acao: str) -> NavioDTO:
     elif acao == "REJEITAR":
         navio.status = StatusNavio.REJEITADO
 
-    session.commit()
+    await session.commit()
     return navio.to_dto()
 
 

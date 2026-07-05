@@ -1,14 +1,14 @@
 import os
 import sys
 import flet as ft
-from threading import Thread
-from cad import obter_sessao
+import asyncio
+from cad import obter_sessao_async
 from ord_propriety import obter_fila_atracacao_dto
 
 
 
 def obter_view(page: ft.Page):
-    # Tabela que vai listar os navios na fila
+
     tabela_fila = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("Posição", weight=ft.FontWeight.BOLD)),
@@ -19,7 +19,7 @@ def obter_view(page: ft.Page):
         rows=[],
     )
 
-    # Texto informativo caso a fila esteja vazia
+
     txt_vazio = ft.Text(
         "Nenhum navio aguardando na fila de atracação no momento.",
         size=16,
@@ -46,7 +46,7 @@ def obter_view(page: ft.Page):
             f"[DEBUG] Gerando ficha técnica do navio {navio.nome} (Posição: {posicao})..."
         )
 
-        # Cálculo dinâmico extraindo dados dos relacionamentos 'cargas'
+
         capitao = getattr(
             navio, "nome_capitao", getattr(navio, "capitao", "Não informado")
         )
@@ -72,11 +72,11 @@ def obter_view(page: ft.Page):
         )
         score = f"{navio.score:.2f}"
 
-        # Função auxiliar para criar linhas com "justify between" e ícones
+
         def criar_linha(icone, rotulo, valor, destaque=False):
             return ft.Row(
                 [
-                    # Lado Esquerdo: Ícone + Rótulo
+
                     ft.Row(
                         [
                             ft.Icon(icone, size=18, color=ft.Colors.BLUE_GREY_500),
@@ -84,7 +84,7 @@ def obter_view(page: ft.Page):
                         ],
                         spacing=8,
                     ),
-                    # Lado Direito: Valor da variável (envolto em container para evitar overflow)
+
                     ft.Container(
                         content=ft.Text(
                             str(valor),
@@ -134,99 +134,94 @@ def obter_view(page: ft.Page):
         dialogo_detalhes.open = True
         page.update()
 
-    def carregar_dados_fila(e=None, sync=False):
+    async def carregar_dados_fila(e=None):
         """Busca os navios validados no banco e monta as linhas da tabela ordenadas."""
-        def worker():
-            try:
-                with obter_sessao() as session:
-                    navios = obter_fila_atracacao_dto(session)
+        try:
+            async with obter_sessao_async() as session:
+                navios = await obter_fila_atracacao_dto(session)
 
-                    novas_linhas = []
+                novas_linhas = []
 
-                    if not navios:
-                        txt_vazio.visible = True
-                        tabela_fila.visible = False
-                    else:
-                        txt_vazio.visible = False
-                        tabela_fila.visible = True
+                if not navios:
+                    txt_vazio.visible = True
+                    tabela_fila.visible = False
+                else:
+                    txt_vazio.visible = False
+                    tabela_fila.visible = True
 
-                        # Varre a lista calculando a posição na fila (index + 1)
-                        for idx, navio in enumerate(navios):
-                            posicao = idx + 1
 
-                            # Define um texto de observação amigável baseado na perecibilidade
-                            obs_texto = (
-                                " | ".join(c.descricao for c in navio.cargas)
-                                if navio.cargas
-                                else "Carga Geral"
+                    for idx, navio in enumerate(navios):
+                        posicao = idx + 1
+
+
+                        obs_texto = (
+                            " | ".join(c.descricao for c in navio.cargas)
+                            if navio.cargas
+                            else "Carga Geral"
+                        )
+                        if navio.cargas and any(c.eh_perecivel for c in navio.cargas):
+                            obs_texto += " ⚠️ [PERECÍVEL]"
+
+
+                        btn_ver_mais = ft.ElevatedButton(
+                            "Ver mais",
+                            icon=ft.Icons.INFO_OUTLINED,
+                            on_click=lambda e, n=navio, p=posicao: abrir_detalhes_navio(
+                                n, p
+                            ),
+                            style=ft.ButtonStyle(
+                                color=ft.Colors.BLUE_700,
+                                bgcolor=ft.Colors.BLUE_50,
+                            ),
+                        )
+
+
+                        novas_linhas.append(
+                            ft.DataRow(
+                                cells=[
+                                    ft.DataCell(
+                                        ft.Text(
+                                            f"{posicao}º", weight=ft.FontWeight.BOLD
+                                         )
+                                    ),
+                                    ft.DataCell(
+                                        ft.Container(
+                                            content=ft.Text(
+                                                navio.nome,
+                                                overflow=ft.TextOverflow.ELLIPSIS,
+                                                max_lines=1,
+                                            ),
+                                            width=180,
+                                            tooltip=navio.nome,
+                                        )
+                                    ),
+                                    ft.DataCell(
+                                        ft.Container(
+                                            content=ft.Text(
+                                                obs_texto,
+                                                overflow=ft.TextOverflow.ELLIPSIS,
+                                                max_lines=1,
+                                                color=ft.Colors.BLUE_GREY_700,
+                                            ),
+                                            width=350,
+                                            tooltip=obs_texto,
+                                        )
+                                    ),
+                                    ft.DataCell(btn_ver_mais),
+                                ]
                             )
-                            if navio.cargas and any(c.eh_perecivel for c in navio.cargas):
-                                obs_texto += " ⚠️ [PERECÍVEL]"
+                        )
+                tabela_fila.rows = novas_linhas
+                page.update()
+        except Exception as erro:
+            print(f"Erro ao carregar fila de atracação: {erro}")
 
-                            # Criação do botão "Ver Mais" para a linha atual
-                            btn_ver_mais = ft.ElevatedButton(
-                                "Ver mais",
-                                icon=ft.Icons.INFO_OUTLINED,
-                                on_click=lambda e, n=navio, p=posicao: abrir_detalhes_navio(
-                                    n, p
-                                ),
-                                style=ft.ButtonStyle(
-                                    color=ft.Colors.BLUE_700,
-                                    bgcolor=ft.Colors.BLUE_50,
-                                ),
-                            )
 
-                            # Adiciona a linha estruturada na tabela visual
-                            novas_linhas.append(
-                                ft.DataRow(
-                                    cells=[
-                                        ft.DataCell(
-                                            ft.Text(
-                                                f"{posicao}º", weight=ft.FontWeight.BOLD
-                                             )
-                                        ),
-                                        ft.DataCell(
-                                            ft.Container(
-                                                content=ft.Text(
-                                                    navio.nome,
-                                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                                    max_lines=1,
-                                                ),
-                                                width=180,
-                                                tooltip=navio.nome,
-                                            )
-                                        ),
-                                        ft.DataCell(
-                                            ft.Container(
-                                                content=ft.Text(
-                                                    obs_texto,
-                                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                                    max_lines=1,
-                                                    color=ft.Colors.BLUE_GREY_700,
-                                                ),
-                                                width=350,
-                                                tooltip=obs_texto,
-                                            )
-                                        ),
-                                        ft.DataCell(btn_ver_mais),
-                                    ]
-                                )
-                            )
-                    tabela_fila.rows = novas_linhas
-                    page.update()
-            except Exception as erro:
-                print(f"Erro ao carregar fila de atracação: {erro}")
-
-        if sync:
-            worker()
-        else:
-            Thread(target=worker).start()
-
-    # Força o carregamento assim que a tela abre pela primeira vez
-    carregar_dados_fila(sync=True)
+    page.run_task(carregar_dados_fila)
 
     container_fila = ft.Container(
-        padding=30,
+        padding=20,
+        expand=True,
         content=ft.Column(
             [
                 ft.Row(
@@ -235,21 +230,22 @@ def obter_view(page: ft.Page):
                             [
                                 ft.Icon(
                                     ft.Icons.FORMAT_LIST_NUMBERED,
-                                    size=32,
-                                    color=ft.Colors.BLUE_GREY_800,
+                                    size=36,
                                 ),
                                 ft.Text(
-                                    "Fila de Atracação Dinâmica",
-                                    size=26,
+                                    "Fila de Atracação - Tempo Real",
+                                    size=28,
                                     weight=ft.FontWeight.BOLD,
                                 ),
                             ],
-                            spacing=10,
+                            spacing=12,
                         ),
                         ft.IconButton(
                             ft.Icons.REFRESH,
                             tooltip="Atualizar Fila",
-                            on_click=carregar_dados_fila,
+                            on_click=lambda e: page.run_task(carregar_dados_fila),
+                            icon_color=ft.Colors.CYAN_700,
+                            icon_size=28,
                         ),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -257,30 +253,35 @@ def obter_view(page: ft.Page):
                 ft.Text(
                     "Abaixo estão listadas as embarcações autorizadas a atracar, ordenadas pelo motor de prioridade do porto.",
                     size=14,
-                    color=ft.Colors.GREY_600,
+                    color=ft.Colors.BLUE_GREY_500,
                 ),
-                ft.Divider(height=20),
+                ft.Divider(height=25, color=ft.Colors.CYAN_700),
                 txt_vazio,
-                ft.ListView(controls=[tabela_fila], expand=True, spacing=10),
+                ft.Card(
+                    elevation=4,
+                    shape=ft.RoundedRectangleBorder(radius=12),
+                    content=ft.Container(
+                        padding=15,
+                        content=ft.ListView(controls=[tabela_fila], expand=True, spacing=10),
+                    ),
+                    expand=True,
+                )
             ],
             expand=True,
         ),
     )
 
-    # Auto-refresh loop a cada 2 segundos se a fila estiver ativa
-    def auto_refresh_loop():
-        import time
+
+    async def auto_refresh_loop():
         while True:
-            time.sleep(2)
-            if not container_fila.page:
-                break
+            await asyncio.sleep(2)
             if getattr(page, "active_tab", None) != "fila":
                 break
             try:
-                carregar_dados_fila(sync=False)
+                await carregar_dados_fila()
             except Exception:
                 pass
 
-    Thread(target=auto_refresh_loop, daemon=True).start()
+    page.run_task(auto_refresh_loop)
 
     return container_fila

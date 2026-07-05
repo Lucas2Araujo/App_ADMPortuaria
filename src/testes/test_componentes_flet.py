@@ -64,7 +64,7 @@ for _path in (_DIR_SRC, _DIR_GUI, _DIR_TELAS):
 import flet as ft
 
 # Importa a função de validação pura (não precisa de Page nem de banco)
-from painel_adm import validar_formulario_navio
+from gui.telas.painel_adm import validar_formulario_navio
 
 
 # ===========================================================================

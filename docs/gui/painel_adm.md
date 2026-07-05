@@ -103,12 +103,14 @@ def validar_formulario_navio(
 ## Fluxo interno de salvamento
 
 ```
-salvar_navio(e)
-  └─► validar_formulario_navio(...)   ← função pura
+salvar_navio(e)  ← assíncrono (async def)
+  └─► validar_formulario_navio(...)   ← função pura (síncrona)
         ├── erros != {}  → exibe error_text em cada campo, retorna
-        └── erros == {}  → chama solicitar_pre_cadastro(session, ...)
-                              └─► status do navio: PENDENTE
+        └── erros == {}  → chama await solicitar_pre_cadastro(session, ...)
+                                                      └─► status do navio: PENDENTE
 ```
+
+> **Nota sobre o Event Loop:** A integração com os controladores de backend foi reescrita e agora ocorre de forma não bloqueante dentro do event loop do Flet.
 
 > **Nota:** O salvamento bem-sucedido cria um navio com status `PENDENTE`.
 > O administrador deve validar manualmente para que o navio ingresse na fila.
