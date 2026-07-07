@@ -11,22 +11,49 @@ O AdminPort é uma aplicação desktop construída com **Python + [Flet](https:/
 O AdminPort possui **dois pontos de entrada distintos**, compartilhando exatamente o mesmo backend (controladores e banco de dados):
 
 ```
-App_ADMPortuaria/
-├── src/
-│   ├── app.py                  # ① Ponto de entrada CLI (Interface de Linha de Comando)
-│   ├── app_gui.py              # ② Ponto de entrada GUI (Interface Gráfica — Flet)
-│   ├── gui/                    # Pacote da interface gráfica (Flet)
-│   │   ├── main_gui.py         # Raiz da aplicação Flet (carregada por app_gui.py)
-│   │   └── telas/
-│   │       ├── painel_adm.py   # Painel do Administrador (tela principal)
-│   │       ├── fila_view.py    # Visualização da fila de atracação
-│   │       └── painel_tripulacao.py  # Painel de registros da tripulação
-│   ├── cad.py                  # Modelos do banco de dados (SQLAlchemy)
-│   ├── controller_cadastros.py # Lógica de pré-cadastro e aprovação (async)
-│   ├── controller_operacao.py  # Lógica de atracação e desatracação (async)
-│   └── ord_propriety.py        # Algoritmo de priorização da fila
-├── docs/                       # Esta documentação
-└── mkdocs.yml
+📦 app_admportuaria
+├── 📁 .github/
+│   └── 📁 workflows/              # Pipelines de CI/CD (GitHub Actions para deploy e testes)
+├── 📁 .vscode/                    # Configurações de ambiente e debug para o VS Code
+├── 📁 docs/                       # Documentação do projeto (Arquivos fonte do MkDocs)
+│   ├── 📁 api/                    # Documentação dos módulos e classes do backend
+│   ├── 📁 Diagramas/              # Modelagem do sistema
+│   │   ├── 📁 Código dos diagramas/ # Arquivos fonte .puml (PlantUML)
+│   │   └── 📁 Imagens/            # Imagens renderizadas (.png) dos diagramas
+│   ├── 📁 gui/                    # Documentação referente à Interface Gráfica
+│   ├── 📁 stylesheets/            # Estilos customizados da documentação (CSS)
+│   ├── 📄 index.md                # Página inicial da documentação
+│   ├── 📄 requisitos.md           # Levantamento de Requisitos
+│   ├── 📄 diagramas.md            # Visão geral dos diagramas
+│   ├── 📄 contexto_projeto.md     # Contextualização do domínio do problema
+│   ├── 📄 testes.md               # Plano e documentação de testes
+│   └── 📄 *.pdf                   # Modelos exportados (DiagramaDB, Protótipo)
+├── 📁 site/                       # Build estático gerado pelo MkDocs (não versionado/editado manualmente)
+├── 📁 src/                        # Código-fonte principal da aplicação
+│   ├── 📁 gui/                    # Interface Gráfica da aplicação
+│   │   ├── 📁 telas/              # Telas específicas do sistema
+│   │   │   ├── 📁 adm/            # Telas do painel administrativo (dashboard, vagas, etc.)
+│   │   │   ├── 📄 login.py        # Tela de login
+│   │   │   ├── 📄 fila_view.py    # Tela de visualização da fila
+│   │   │   └── 📄 painel_tripulacao.py
+│   │   ├── 📄 main_gui.py         # Arquivo principal para inicialização da interface
+│   │   └── 📄 compat.py           
+│   ├── 📁 testes/                 # Suíte de testes automatizados (Pytest)
+│   │   ├── 📁 backend/            # Testes de integração e lógica de negócios
+│   │   ├── 📁 cli/                # Testes da interface de linha de comando
+│   │   ├── 📁 gui/                # Testes de componentes visuais
+│   │   └── 📄 conftest.py         # Configurações globais dos testes
+│   ├── 📄 app.py                  # Ponto de entrada CLI/Geral
+│   ├── 📄 app_gui.py              # Ponto de entrada da GUI
+│   ├── 📄 controller_*.py         # Controladores da lógica de negócio
+│   ├── 📄 dto.py                  # Objetos de Transferência de Dados
+│   ├── 📄 ord_propriety.py        # Algoritmos/lógica de prioridade/ordenação
+│   ├── 📄 pop_bd.py               # Script para popular o banco de dados
+│   └── 📄 requirements.txt        # Dependências do projeto Python
+├── 📄 .gitignore                  # Arquivos e pastas ignorados pelo Git
+├── 📄 LICENSE                     # Licença do projeto
+├── 📄 mkdocs.yml                  # Arquivo de configuração e estrutura do MkDocs
+└── 📄 README.md                   # Apresentação do repositório
 ```
 
 > **`app.py`** — Versão CLI totalmente funcional. Usa `asyncio` e expõe todos os fluxos (cadastro, auditoria, atracação, desatracação) via menus de texto interativos no terminal.
