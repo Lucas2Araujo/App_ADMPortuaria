@@ -2,6 +2,7 @@ SQLAlchemy
 Faker
 pytest
 pytest-cov
+pytest-asyncio
 black
 mkdocs-material
 mkdocstrings[python]

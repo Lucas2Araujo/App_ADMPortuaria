@@ -1,24 +1,22 @@
 import unittest
 from unittest.mock import patch
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from cad import Base, Navio
 import app
 
 
-class TestCLIApp(unittest.TestCase):
-    def setUp(self):
-        # 1. Cria um banco SQLite apenas na memória RAM (ultrarrápido e descartável)
-        self.engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(self.engine)
-        SessionFactory = sessionmaker(bind=self.engine)
-        self.session = SessionFactory()
+class TestCLIApp(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        AsyncSessionFactory = async_sessionmaker(bind=self.engine, class_=AsyncSession, expire_on_commit=False)
+        self.session = AsyncSessionFactory()
 
-    def tearDown(self):
-        self.session.close()
+    async def asyncTearDown(self):
+        await self.session.close()
 
-    # O 'patch' injeta respostas automáticas sempre que o código original chamar input()
-    # Ordem dos inputs: IMO, Nome, Capitão, Cia, Categoria(9=Containers), Peso, Alfândega(S)
     @patch(
         "builtins.input",
         side_effect=[
@@ -31,21 +29,20 @@ class TestCLIApp(unittest.TestCase):
             "S",
         ],
     )
-    def test_coletar_dados_cadastro_cli(self, mock_input):
+    async def test_coletar_dados_cadastro_cli(self, mock_input):
         """Testa se o formulário do CLI capta os dados corretamente e salva no banco"""
 
-        # Executa a função do CLI que contém vários input()
-        app.coletar_dados_cadastro(self.session)
+        await app.coletar_dados_cadastro(self.session)
 
         # Verifica no banco de dados isolado se o registro foi criado corretamente
-        navio_salvo = self.session.query(Navio).filter_by(imo_id="IMO1234567").first()
+        result = await self.session.execute(select(Navio).filter_by(imo_id="IMO1234567"))
+        navio_salvo = result.scalar_one_or_none()
 
         self.assertIsNotNone(navio_salvo, "O navio não foi salvo no banco de dados.")
         self.assertEqual(navio_salvo.nome, "Estrela do Mar")
         self.assertEqual(navio_salvo.status.name, "PENDENTE")
         self.assertEqual(len(navio_salvo.cargas), 1)
         self.assertEqual(navio_salvo.cargas[0].categoria, "COMUM")
-
 
 if __name__ == "__main__":
     unittest.main()

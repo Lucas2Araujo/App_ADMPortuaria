@@ -11,7 +11,6 @@ from gui.telas.fila_view import obter_view as view_fila
 from gui.telas.painel_tripulacao import obter_view as view_tripulacao
 
 def main(page: ft.Page):
-    # Inicialização do Banco de Dados
     from cad import inicializar_banco, obter_sessao
     from pop_bd import gerar_vagas_iniciais
     db_path = os.path.join(diretorio_src, "porto.db")
@@ -58,7 +57,6 @@ def main(page: ft.Page):
             dialogo_senha.open = False
             senha_field.value = ""
             senha_field.error_text = None
-            page.update()
 
         def abrir_dialogo_admin(e):
             page.overlay.append(dialogo_senha)
@@ -114,13 +112,41 @@ def main(page: ft.Page):
             page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
             page.update()
 
+        def gerar_dados_bd(e):
+            try:
+                import pop_bd
+                from cad import obter_sessao
+
+                with obter_sessao() as session:
+                    pop_bd.gerar_navios_fake(session, 60)
+
+                page.snack_bar = ft.SnackBar(
+                    ft.Text(
+                        "60 navios injetados com sucesso! Atualize a tabela."
+                    ),
+                    bgcolor=ft.Colors.GREEN_700,
+                )
+                page.snack_bar.open = True
+            except Exception as err:
+                print(f"Erro ao gerar dados: {err}")
+            page.update()
+
         btn_sair = ft.IconButton(icon=ft.Icons.LOGOUT, icon_color=ft.Colors.RED_300, on_click=lambda e: mostrar_login())
 
         page.appbar = ft.AppBar(
             title=ft.Text(f"Terminal Portuário S/A - {'[Admin]' if role == 'admin' else 'Tripulação'}"),
             bgcolor=ft.Colors.BLUE_GREY_900,
             color=ft.Colors.WHITE,
-            actions=[ft.IconButton(ft.Icons.NIGHTS_STAY, on_click=alternar_tema), btn_sair],
+            actions=[
+                ft.IconButton(
+                    ft.Icons.ACCOUNT_CIRCLE,
+                    icon_color=ft.Colors.WHITE,
+                    tooltip="Gerar Dados",
+                    on_click=gerar_dados_bd,
+                ),
+                ft.IconButton(ft.Icons.NIGHTS_STAY, on_click=alternar_tema),
+                btn_sair
+            ],
         )
 
         # Filtro de permissões
@@ -176,5 +202,3 @@ def main(page: ft.Page):
         navegar_para("dashboard")
 
     mostrar_login()
-
-ft.run(main)

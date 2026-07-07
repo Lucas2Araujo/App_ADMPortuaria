@@ -270,13 +270,14 @@ def obter_view(page: ft.Page):
         ),
     )
 
+
     async def auto_refresh_loop():
         while True:
             await asyncio.sleep(2)
+            if getattr(page, "active_tab", None) != "fila":
+                break
             try:
-                # O loop continua existindo em background, mas só consome memória se a aba estiver ativa!
-                if getattr(page, "active_tab", None) == "fila":
-                    await carregar_dados_fila()
+                await carregar_dados_fila()
             except Exception:
                 pass
 

@@ -68,7 +68,6 @@ def validar_formulario_navio(
         
     return erros
 
-
 class PainelAdmView:
     def __init__(self, page: ft.Page, aba_ativa="dashboard"):
         self.page = page
@@ -142,7 +141,7 @@ class PainelAdmView:
 
         self.dialogo_confirmar_atracacao = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Confirmar Operação de atracação"),
+            title=ft.Text("Confirmar Operação de atracaçao"),
             content=self.txt_msg_atracacao,
             actions=[
                 ft.TextButton(
@@ -354,7 +353,6 @@ class PainelAdmView:
                     ),
                     self.container_grafico,
                     ft.Divider(height=25, color=ft.Colors.TRANSPARENT),
-                    # APLICADO FIXED HEIGHT NAS CAIXAS E RETIRADO O STRETCH BUGADO
                     ft.Row(
                         [self.caixa_logs, self.caixa_proximos, self.caixa_vagas],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -576,12 +574,12 @@ class PainelAdmView:
                     btn_aprovar = ft.IconButton(
                         icon=ft.Icons.CHECK_CIRCLE,
                         icon_color=ft.Colors.GREEN,
-                        on_click=lambda e, imo=navio.imo_id: self.abrir_confirmacao(imo, "APROVAR"),
+                        on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao(imo, nome, "APROVAR"),
                     )
                     btn_rejeitar = ft.IconButton(
                         icon=ft.Icons.CANCEL,
                         icon_color=ft.Colors.RED,
-                        on_click=lambda e, imo=navio.imo_id: self.abrir_confirmacao(imo, "REJEITAR"),
+                        on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao(imo, nome, "REJEITAR"),
                     )
                     novas_linhas.append(
                         ft.DataRow(
@@ -669,10 +667,10 @@ class PainelAdmView:
         self.dialogo_confirmacao.open = False
         self.page.update()
 
-    def abrir_confirmacao(self, imo, acao):
+    def abrir_confirmacao(self, imo, nome, acao):
         self.imo_em_auditoria = imo
         self.acao_em_auditoria = acao
-        self.txt_mensagem_modal.value = f"Deseja {acao.lower()} a solicitação do navio {imo}?"
+        self.txt_mensagem_modal.value = f"Deseja {acao.lower()} a solicitação do navio {nome} ({imo})?"
         self.dialogo_confirmacao.open = True
         self.page.update()
 
@@ -804,9 +802,9 @@ class PainelAdmView:
         self.dialogo_confirmar_exclusao.open = False
         self.page.update()
 
-    def abrir_confirmacao_exclusao(self, imo):
+    def abrir_confirmacao_exclusao(self, imo, nome):
         self.imo_para_excluir = imo
-        self.txt_msg_exclusao.value = f"Tem certeza que deseja excluir permanentemente o navio {imo}?"
+        self.txt_msg_exclusao.value = f"Tem certeza que deseja excluir permanentemente o navio {nome} ({imo})?"
         self.dialogo_confirmar_exclusao.open = True
         self.page.update()
 
@@ -830,8 +828,6 @@ class PainelAdmView:
                     *controles_lista,
                 ],
                 spacing=5,
-                # analizar, chatão isso ai
-                scroll=ft.ScrollMode.AUTO, # permite scroll nas caixas que precisarem 
             ),
         )
 
@@ -1114,7 +1110,7 @@ class PainelAdmView:
             btn_excluir = ft.IconButton(
                 icon=ft.Icons.DELETE,
                 icon_color=ft.Colors.RED,
-                on_click=lambda e, imo=navio.imo_id: self.abrir_confirmacao_exclusao(imo),
+                on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao_exclusao(imo, nome),
             )
             novas_linhas_navios.append(
                 ft.DataRow(

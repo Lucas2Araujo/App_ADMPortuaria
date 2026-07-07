@@ -402,7 +402,7 @@ class TestEstadoVisualControles:
         corretamente desativa o botão antes de chamar o backend.
         """
         # ARRANGE
-        btn_atracar = ft.ElevatedButton("Atracar Próximo", disabled=False)
+        btn_atracar = ft.Button("Atracar Próximo", disabled=False)
         loading = ft.ProgressRing(visible=False)
         operacao_executada = []  # lista mutável para capturar chamadas dentro do closure
 
