@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy import select, delete
 
-_DIR_SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_DIR_SRC = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _DIR_SRC not in sys.path:
     sys.path.insert(0, _DIR_SRC)
 

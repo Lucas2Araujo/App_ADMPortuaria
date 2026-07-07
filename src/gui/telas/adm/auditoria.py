@@ -1,6 +1,7 @@
 import flet as ft
 import gui.compat
 import asyncio
+import math
 from cad import obter_sessao_async
 from controller_cadastros import (
     auditar_navio_individual,
@@ -15,6 +16,7 @@ class AuditoriaView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__(expand=True)
         self._page = page
+        self._active = False  # lifecycle flag — stops loop on logout
 
         # Configuração da tabela principal com cores e bordas da nova UI
         self.tabela_pendentes = ft.DataTable(
@@ -47,6 +49,7 @@ class AuditoriaView(ft.Container):
 
         self.imo_em_auditoria = None
         self.acao_em_auditoria = None
+        self._is_batch_audit = False
 
         # Modal de Confirmação Normal
         self.txt_mensagem_modal = ft.Text("")
@@ -65,17 +68,17 @@ class AuditoriaView(ft.Container):
             ),
             content=self.txt_mensagem_modal,
             actions=[
-                ft.ElevatedButton(
+                ft.Button(
                     "Cancelar",
                     on_click=self.fechar_modal,
                     style=ft.ButtonStyle(
                         color="#5a7494", bgcolor="transparent", elevation=0
                     ),
                 ),
-                ft.ElevatedButton(
+                ft.Button(
                     "Confirmar",
                     on_click=lambda e: self._page.run_task(
-                        self.__auditar_documentao_navio
+                        self.__auditar_documentacao_navio
                     ),
                     style=ft.ButtonStyle(bgcolor="#0d2b4e", color="white"),
                 ),
@@ -133,7 +136,7 @@ class AuditoriaView(ft.Container):
                 width=450,
             ),
             actions=[
-                ft.ElevatedButton(
+                ft.Button(
                     "Confirmar Leitura",
                     on_click=self.confirmar_leitura_carga,
                     style=ft.ButtonStyle(bgcolor="#0d2b4e", color="white"),
@@ -166,7 +169,7 @@ class AuditoriaView(ft.Container):
                         color="#334155",
                     ),
                     ft.Container(height=8),
-                    ft.ElevatedButton(
+                    ft.Button(
                         "Ultra Perecivel (Medicamentos / Carnes)",
                         on_click=lambda e: self._page.run_task(
                             self._aprovar_outros, "URGENTE_PERECIVEL", True
@@ -174,7 +177,7 @@ class AuditoriaView(ft.Container):
                         width=400,
                         style=ft.ButtonStyle(bgcolor="#fee2e2", color="#dc2626"),
                     ),
-                    ft.ElevatedButton(
+                    ft.Button(
                         "Alta Perecibilidade (Frutas / Laticínios)",
                         on_click=lambda e: self._page.run_task(
                             self._aprovar_outros, "ALTA_PERECIBILIDADE", True
@@ -182,15 +185,15 @@ class AuditoriaView(ft.Container):
                         width=400,
                         style=ft.ButtonStyle(bgcolor="#ffedd5", color="#ea580c"),
                     ),
-                    ft.ElevatedButton(
+                    ft.Button(
                         "Baixa Perecibilidade (Grãos Úmidos)",
                         on_click=lambda e: self._page.run_task(
-                            self._aprovar_outros, "BAIXA_PERECIBILIDADE", False
+                            self._aprovar_outros, "BAIXA_PERECIBILIDADE", True
                         ),
                         width=400,
                         style=ft.ButtonStyle(bgcolor="#fef3c7", color="#d97706"),
                     ),
-                    ft.ElevatedButton(
+                    ft.Button(
                         "Comum (Não Perecivel)",
                         on_click=lambda e: self._page.run_task(
                             self._aprovar_outros, "COMUM", False
@@ -210,6 +213,65 @@ class AuditoriaView(ft.Container):
                 )
             ],
             actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        # Configuração da Paginação
+        self.pagina_atual = 1
+        self.itens_por_pagina = 10
+        self.total_paginas = 1
+
+        self.btn_anterior = ft.IconButton(
+            icon=ft.Icons.NAVIGATE_BEFORE,
+            tooltip="Página Anterior",
+            on_click=self.pagina_anterior,
+            disabled=True,
+        )
+        self.txt_pagina = ft.Text("Página 1 de 1", size=13, weight=ft.FontWeight.BOLD)
+        self.btn_proximo = ft.IconButton(
+            icon=ft.Icons.NAVIGATE_NEXT,
+            tooltip="Próxima Página",
+            on_click=self.proxima_pagina,
+            disabled=True,
+        )
+        self.txt_paginas_info = ft.Text(
+            "Exibindo 0-0 de 0 itens", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+        )
+
+        self.dropdown_limite = ft.Dropdown(
+            options=[
+                ft.dropdown.Option("10", text="10 por página"),
+                ft.dropdown.Option("25", text="25 por página"),
+                ft.dropdown.Option("50", text="50 por página"),
+                ft.dropdown.Option("todos", text="Todos"),
+            ],
+            value="10",
+            on_select=self.alterar_limite,
+            width=150,
+            height=40,
+            text_size=12,
+            content_padding=ft.padding.symmetric(horizontal=10, vertical=0),
+        )
+
+        self.row_paginacao = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Row(
+                        [self.txt_paginas_info, self.dropdown_limite],
+                        spacing=20,
+                        alignment=ft.MainAxisAlignment.START,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Row(
+                        [self.btn_anterior, self.txt_pagina, self.btn_proximo],
+                        spacing=10,
+                        alignment=ft.MainAxisAlignment.END,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            padding=ft.padding.symmetric(horizontal=20, vertical=10),
+            border=ft.border.only(top=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
         )
 
         self.content = ft.Container(
@@ -244,7 +306,7 @@ class AuditoriaView(ft.Container):
                                         ),
                                         icon_color="#5a7494",
                                     ),
-                                    ft.ElevatedButton(
+                                    ft.Button(
                                         "Auditar Todos Automaticamente",
                                         icon=ft.Icons.FACT_CHECK,
                                         on_click=lambda e: self._page.run_task(
@@ -271,7 +333,13 @@ class AuditoriaView(ft.Container):
                             ft.Row(
                                 controls=[
                                     ft.Container(
-                                        content=self.tabela_pendentes,
+                                        content=ft.Column(
+                                            [
+                                                self.tabela_pendentes,
+                                                self.row_paginacao,
+                                            ],
+                                            spacing=0,
+                                        ),
                                         bgcolor=ft.Colors.SURFACE,
                                         border_radius=12,
                                     )
@@ -297,8 +365,12 @@ class AuditoriaView(ft.Container):
 
     def did_mount(self):
         """Called by Flet after this control is added to the page tree."""
+        self._active = True
         self._page.run_task(self.atualizar)
         self._page.run_task(self.auto_refresh_loop)
+
+    def will_unmount(self):
+        self._active = False
 
     def abrir_confirmacao(self, imo, nome, acao):
         self.imo_em_auditoria = imo
@@ -327,11 +399,14 @@ class AuditoriaView(ft.Container):
         self._page.update()
 
     def confirmar_leitura_carga(self, e):
+        """Confirma a leitura da descrição da carga e fecha o diálogo."""
         if self.imo_em_leitura:
             self.imos_lidos.add(self.imo_em_leitura)
-            self.dialogo_leitura.open = False
             self.imo_em_leitura = None
-            self._page.run_task(self.atualizar)
+        # Sempre fecha o diálogo, mesmo em condição de corrida
+        self.dialogo_leitura.open = False
+        self._page.run_task(self.atualizar)
+        self._page.update()
 
     def _fechar_modal_perecibilidade(self, e=None):
         self.modal_perecibilidade.open = False
@@ -352,7 +427,6 @@ class AuditoriaView(ft.Container):
         self._page.update()
 
         imo = self._imo_aprovacao_outros
-        nome = self._nome_aprovacao_outros
         self._imo_aprovacao_outros = None
         self._nome_aprovacao_outros = None
 
@@ -374,7 +448,7 @@ class AuditoriaView(ft.Container):
             # Agora aprova normalmente
             self.imo_em_auditoria = imo
             self.acao_em_auditoria = "APROVAR"
-            await self.__auditar_documentao_navio()
+            await self.__auditar_documentacao_navio()
             # Limpa o IMO do set de lidos (navio aprovado sai da fila)
             self.imos_lidos.discard(imo)
         except Exception as err:
@@ -407,34 +481,40 @@ class AuditoriaView(ft.Container):
                 ),
                 ft.Column(
                     [
-                        ft.ElevatedButton(
+                        ft.Button(
                             "1. Ultra Perecível",
-                            on_click=lambda e: self._solicitar_classificacao_carga(
-                                "URGENTE_PERECIVEL", True
+                            on_click=lambda e: self._page.run_task(
+                                self._solicitar_classificacao_carga,
+                                "URGENTE_PERECIVEL",
+                                True,
                             ),
                             width=350,
                             style=ft.ButtonStyle(bgcolor="#fee2e2", color="#dc2626"),
                         ),
-                        ft.ElevatedButton(
+                        ft.Button(
                             "2. Alta Perecibilidade",
-                            on_click=lambda e: self._solicitar_classificacao_carga(
-                                "ALTA_PERECIBILIDADE", True
+                            on_click=lambda e: self._page.run_task(
+                                self._solicitar_classificacao_carga,
+                                "ALTA_PERECIBILIDADE",
+                                True,
                             ),
                             width=350,
                             style=ft.ButtonStyle(bgcolor="#ffedd5", color="#ea580c"),
                         ),
-                        ft.ElevatedButton(
+                        ft.Button(
                             "3. Baixa Perecibilidade",
-                            on_click=lambda e: self._solicitar_classificacao_carga(
-                                "BAIXA_PERECIBILIDADE", True
+                            on_click=lambda e: self._page.run_task(
+                                self._solicitar_classificacao_carga,
+                                "BAIXA_PERECIBILIDADE",
+                                True,
                             ),
                             width=350,
                             style=ft.ButtonStyle(bgcolor="#fef3c7", color="#d97706"),
                         ),
-                        ft.ElevatedButton(
+                        ft.Button(
                             "4. Comum",
-                            on_click=lambda e: self._solicitar_classificacao_carga(
-                                "COMUM", False
+                            on_click=lambda e: self._page.run_task(
+                                self._solicitar_classificacao_carga, "COMUM", False
                             ),
                             width=350,
                             style=ft.ButtonStyle(bgcolor="#f1f5f9", color="#64748b"),
@@ -474,7 +554,10 @@ class AuditoriaView(ft.Container):
                 self._page.update()
 
                 # Re-tenta a ação original
-                await self.__auditar_documentao_navio()
+                if getattr(self, "_is_batch_audit", False):
+                    await self.auditar_todos_pendentes()
+                else:
+                    await self.__auditar_documentacao_navio()
             except Exception as err:
                 self._page.snack_bar = ft.SnackBar(
                     ft.Text(f"Erro ao classificar carga: {err}"), bgcolor=ft.Colors.RED
@@ -484,7 +567,9 @@ class AuditoriaView(ft.Container):
             finally:
                 self.erro_carga_pendente = None
 
-    async def __auditar_documentao_navio(self):
+    async def __auditar_documentacao_navio(self):
+        """Executa a auditoria individual de um navio via sessão assíncrona."""
+        self._is_batch_audit = False
         if self.dialogo_confirmacao.open:
             self.dialogo_confirmacao.open = False
             self._page.update()
@@ -514,6 +599,7 @@ class AuditoriaView(ft.Container):
         self._page.update()
 
     async def auditar_todos_pendentes(self):
+        self._is_batch_audit = True
         # NOTA: Auditar todos também pode disparar CargaNaoClassificadaError.
         # Nesse caso, vamos capturar e avisar o usuário para classificar manualmente primeiro.
         try:
@@ -541,41 +627,108 @@ class AuditoriaView(ft.Container):
             e.control.bgcolor = "#fecaca" if e.data == "true" else "#fee2e2"
         e.control.update()
 
-    async def carregar_solicitacoes_pendentes(self, session):
-        navios = await obter_solicitacoes_pendentes_dto(session)
+    def _criar_linha_navio(self, navio):
+        capitao_nome = navio.nome_capitao
+        carga_txt = (
+            ", ".join(c.descricao for c in navio.cargas) if navio.cargas else "N/A"
+        )
+        docs_ok = (
+            all(c.documento_alfandega for c in navio.cargas) if navio.cargas else False
+        )
 
-        novas_linhas = []
-        for navio in navios:
-            capitao_nome = navio.nome_capitao
-            carga_txt = (
-                ", ".join(c.descricao for c in navio.cargas) if navio.cargas else "N/A"
-            )
-            docs_ok = (
-                all(c.documento_alfandega for c in navio.cargas)
-                if navio.cargas
-                else False
-            )
+        docs_widget = ft.Row(
+            [
+                (
+                    ft.Icon(ft.Icons.CHECK_CIRCLE, color="#16a34a", size=16)
+                    if docs_ok
+                    else ft.Icon(ft.Icons.CANCEL, color="#dc2626", size=16)
+                ),
+                ft.Text(
+                    "Sim" if docs_ok else "Não",
+                    color="#16a34a" if docs_ok else "#dc2626",
+                    size=12,
+                    weight=ft.FontWeight.BOLD,
+                ),
+            ],
+            spacing=4,
+        )
 
-            # Badge para Documentos
-            docs_widget = ft.Row(
+        btn_aprovar = ft.Container(
+            content=ft.Row(
                 [
-                    (
-                        ft.Icon(ft.Icons.CHECK_CIRCLE, color="#16a34a", size=16)
-                        if docs_ok
-                        else ft.Icon(ft.Icons.CANCEL, color="#dc2626", size=16)
-                    ),
+                    ft.Icon(ft.Icons.CHECK, color="#16a34a", size=16),
                     ft.Text(
-                        "Sim" if docs_ok else "Não",
-                        color="#16a34a" if docs_ok else "#dc2626",
-                        size=12,
-                        weight=ft.FontWeight.BOLD,
+                        "Aprovar", color="#16a34a", size=12, weight=ft.FontWeight.BOLD
                     ),
                 ],
                 spacing=4,
-            )
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            bgcolor="#dcfce7",
+            border=ft.border.all(1, "#86efac"),
+            border_radius=8,
+            padding=ft.padding.symmetric(horizontal=10, vertical=4),
+            on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao(
+                imo, nome, "APROVAR"
+            ),
+            on_hover=self._hover_btn,
+            data="aprovar",
+            ink=True,
+        )
 
-            # Botões de Ação
-            btn_aprovar = ft.Container(
+        btn_rejeitar = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.CLOSE, color="#dc2626", size=16),
+                    ft.Text(
+                        "Rejeitar", color="#dc2626", size=12, weight=ft.FontWeight.BOLD
+                    ),
+                ],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            bgcolor="#fee2e2",
+            border=ft.border.all(1, "#fca5a5"),
+            border_radius=8,
+            padding=ft.padding.symmetric(horizontal=10, vertical=4),
+            on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao(
+                imo, nome, "REJEITAR"
+            ),
+            on_hover=self._hover_btn,
+            data="rejeitar",
+            ink=True,
+        )
+
+        tem_carga_outros = any(c.categoria == "OUTROS_PENDENTE" for c in navio.cargas)
+        lido = navio.imo_id in self.imos_lidos
+
+        if tem_carga_outros and not lido:
+            btn_ler = ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(ft.Icons.DESCRIPTION, color="#1e3a8a", size=16),
+                        ft.Text(
+                            "Ler Descrição",
+                            color="#1e3a8a",
+                            size=12,
+                            weight=ft.FontWeight.BOLD,
+                        ),
+                    ],
+                    spacing=4,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+                bgcolor="#dbeafe",
+                border=ft.border.all(1, "#3b82f6"),
+                border_radius=8,
+                padding=ft.padding.symmetric(horizontal=10, vertical=4),
+                on_click=lambda e, imo=navio.imo_id, nome=navio.nome, desc=carga_txt: self.abrir_leitura(
+                    imo, nome, desc
+                ),
+                ink=True,
+            )
+            acoes_widget = ft.Row([btn_ler], spacing=8)
+        elif tem_carga_outros and lido:
+            btn_aprovar_outros = ft.Container(
                 content=ft.Row(
                     [
                         ft.Icon(ft.Icons.CHECK, color="#16a34a", size=16),
@@ -593,165 +746,125 @@ class AuditoriaView(ft.Container):
                 border=ft.border.all(1, "#86efac"),
                 border_radius=8,
                 padding=ft.padding.symmetric(horizontal=10, vertical=4),
-                on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao(
-                    imo, nome, "APROVAR"
+                on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_aprovacao_outros(
+                    imo, nome
                 ),
                 on_hover=self._hover_btn,
                 data="aprovar",
                 ink=True,
             )
+            acoes_widget = ft.Row([btn_aprovar_outros, btn_rejeitar], spacing=8)
+        else:
+            acoes_widget = ft.Row([btn_aprovar, btn_rejeitar], spacing=8)
 
-            btn_rejeitar = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Icon(ft.Icons.CLOSE, color="#dc2626", size=16),
-                        ft.Text(
-                            "Rejeitar",
-                            color="#dc2626",
+        return ft.DataRow(
+            cells=[
+                ft.DataCell(
+                    ft.Text(
+                        navio.imo_id,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        size=12,
+                        weight=ft.FontWeight.W_500,
+                    )
+                ),
+                ft.DataCell(
+                    ft.Container(
+                        content=ft.Text(
+                            navio.nome,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            max_lines=1,
+                            color=ft.Colors.ON_SURFACE,
+                            weight=ft.FontWeight.W_600,
+                            size=13,
+                        ),
+                        width=150,
+                        tooltip=navio.nome,
+                    )
+                ),
+                ft.DataCell(
+                    ft.Container(
+                        content=ft.Text(
+                            capitao_nome,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            max_lines=1,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            size=13,
+                        ),
+                        width=130,
+                        tooltip=capitao_nome,
+                    )
+                ),
+                ft.DataCell(
+                    ft.Container(
+                        content=ft.Text(
+                            carga_txt,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            max_lines=1,
+                            color=ft.Colors.ON_SURFACE,
                             size=12,
-                            weight=ft.FontWeight.BOLD,
                         ),
-                    ],
-                    spacing=4,
-                    alignment=ft.MainAxisAlignment.CENTER,
+                        bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
+                        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                        border_radius=12,
+                        tooltip=carga_txt,
+                    )
                 ),
-                bgcolor="#fee2e2",
-                border=ft.border.all(1, "#fca5a5"),
-                border_radius=8,
-                padding=ft.padding.symmetric(horizontal=10, vertical=4),
-                on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao(
-                    imo, nome, "REJEITAR"
-                ),
-                on_hover=self._hover_btn,
-                data="rejeitar",
-                ink=True,
-            )
+                ft.DataCell(docs_widget),
+                ft.DataCell(acoes_widget),
+            ]
+        )
 
-            # Check if this ship's cargo has "OUTROS_PENDENTE" category
-            tem_carga_outros = any(
-                c.categoria == "OUTROS_PENDENTE" for c in navio.cargas
-            )
-            lido = navio.imo_id in self.imos_lidos
+    def pagina_anterior(self, e):
+        if self.pagina_atual > 1:
+            self.pagina_atual -= 1
+            self._page.run_task(self.atualizar)
 
-            if tem_carga_outros and not lido:
-                # Botão de Ler Descrição — obrigatório antes de qualquer ação
-                btn_ler = ft.Container(
-                    content=ft.Row(
-                        [
-                            ft.Icon(ft.Icons.DESCRIPTION, color="#1e3a8a", size=16),
-                            ft.Text(
-                                "Ler Descrição",
-                                color="#1e3a8a",
-                                size=12,
-                                weight=ft.FontWeight.BOLD,
-                            ),
-                        ],
-                        spacing=4,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                    bgcolor="#dbeafe",
-                    border=ft.border.all(1, "#3b82f6"),
-                    border_radius=8,
-                    padding=ft.padding.symmetric(horizontal=10, vertical=4),
-                    on_click=lambda e, imo=navio.imo_id, nome=navio.nome, desc=carga_txt: self.abrir_leitura(
-                        imo, nome, desc
-                    ),
-                    ink=True,
-                )
-                acoes_widget = ft.Row([btn_ler], spacing=8)
-            elif tem_carga_outros and lido:
-                # Após leitura: Aprovar abre seletor de perecibilidade; Rejeitar vai direto
-                btn_aprovar_outros = ft.Container(
-                    content=ft.Row(
-                        [
-                            ft.Icon(ft.Icons.CHECK, color="#16a34a", size=16),
-                            ft.Text(
-                                "Aprovar",
-                                color="#16a34a",
-                                size=12,
-                                weight=ft.FontWeight.BOLD,
-                            ),
-                        ],
-                        spacing=4,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                    bgcolor="#dcfce7",
-                    border=ft.border.all(1, "#86efac"),
-                    border_radius=8,
-                    padding=ft.padding.symmetric(horizontal=10, vertical=4),
-                    on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_aprovacao_outros(
-                        imo, nome
-                    ),
-                    on_hover=self._hover_btn,
-                    data="aprovar",
-                    ink=True,
-                )
-                acoes_widget = ft.Row([btn_aprovar_outros, btn_rejeitar], spacing=8)
-            else:
-                # Carga comum — fluxo normal de aprovação
-                acoes_widget = ft.Row([btn_aprovar, btn_rejeitar], spacing=8)
+    def proxima_pagina(self, e):
+        if self.pagina_atual < self.total_paginas:
+            self.pagina_atual += 1
+            self._page.run_task(self.atualizar)
 
-            novas_linhas.append(
-                ft.DataRow(
-                    cells=[
-                        ft.DataCell(
-                            ft.Text(
-                                navio.imo_id,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                size=12,
-                                weight=ft.FontWeight.W_500,
-                            )
-                        ),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(
-                                    navio.nome,
-                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                    max_lines=1,
-                                    color=ft.Colors.ON_SURFACE,
-                                    weight=ft.FontWeight.W_600,
-                                    size=13,
-                                ),
-                                width=150,
-                                tooltip=navio.nome,
-                            )
-                        ),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(
-                                    capitao_nome,
-                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                    max_lines=1,
-                                    color=ft.Colors.ON_SURFACE_VARIANT,
-                                    size=13,
-                                ),
-                                width=130,
-                                tooltip=capitao_nome,
-                            )
-                        ),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(
-                                    carga_txt,
-                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                    max_lines=1,
-                                    color=ft.Colors.ON_SURFACE,
-                                    size=12,
-                                ),
-                                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
-                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
-                                border_radius=12,
-                                tooltip=carga_txt,
-                            )
-                        ),
-                        ft.DataCell(docs_widget),
-                        ft.DataCell(acoes_widget),
-                    ]
-                )
-            )
+    def alterar_limite(self, e):
+        limite_val = self.dropdown_limite.value
+        if limite_val == "todos":
+            self.itens_por_pagina = 1000000
+        else:
+            self.itens_por_pagina = int(limite_val)
+        self.pagina_atual = 1
+        self._page.run_task(self.atualizar)
+
+    async def carregar_solicitacoes_pendentes(self, session):
+        navios = await obter_solicitacoes_pendentes_dto(session)
+        total_itens = len(navios)
+        limite = self.itens_por_pagina
+        self.total_paginas = max(1, (total_itens + limite - 1) // limite)
+
+        if self.pagina_atual > self.total_paginas:
+            self.pagina_atual = self.total_paginas
+
+        inicio = (self.pagina_atual - 1) * limite
+        fim = min(inicio + limite, total_itens)
+        navios_pagina = navios[inicio:fim]
+
+        novas_linhas = [self._criar_linha_navio(navio) for navio in navios_pagina]
         self.tabela_pendentes.rows = novas_linhas
         self.txt_vazio_auditoria.visible = len(novas_linhas) == 0
         self.tabela_pendentes.visible = len(novas_linhas) > 0
+
+        # Atualizar controles de paginação
+        self.txt_pagina.value = f"Página {self.pagina_atual} de {self.total_paginas}"
+        self.btn_anterior.disabled = self.pagina_atual <= 1
+        self.btn_proximo.disabled = self.pagina_atual >= self.total_paginas
+
+        if total_itens == 0:
+            self.txt_paginas_info.value = "Exibindo 0 de 0 itens"
+            self.row_paginacao.visible = False
+        else:
+            limite_texto = "Todos" if limite >= 1000000 else f"{inicio + 1}-{fim}"
+            self.txt_paginas_info.value = (
+                f"Exibindo {limite_texto} de {total_itens} itens"
+            )
+            self.row_paginacao.visible = True
 
     async def atualizar(self, e=None):
         try:
@@ -762,9 +875,11 @@ class AuditoriaView(ft.Container):
             print(f"Erro ao carregar auditorias pendentes: {err}")
 
     async def auto_refresh_loop(self):
-        while True:
+        while self._active:
             await asyncio.sleep(3)
             try:
+                if not self._active:
+                    break
                 if getattr(self._page, "active_tab", None) == "auditoria":
                     await self.atualizar()
             except Exception:

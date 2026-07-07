@@ -56,6 +56,7 @@ nav:
     - Painel do Administrador: gui/painel_adm.md
     - Fila de Atracação: gui/fila_view.md
     - Painel da Tripulação: gui/painel_tripulacao.md
+  - Interface CLI (Terminal): cli_view.md
   - Testes Automatizados: testes.md
   - Material de Referência (Diagramas): diagramas.md
   - Requisitos do Projeto: requisitos.md

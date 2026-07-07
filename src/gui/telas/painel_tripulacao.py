@@ -124,23 +124,30 @@ def obter_view(page: ft.Page):
         active_color=ft.Colors.CYAN_700,
     )
 
-    async def processar_submissao_cadastro(e):
-        imo_limpo = sanitizar_texto(txt_imo.value or "")
-        nome_limpo = sanitizar_texto(txt_nome_navio.value or "")
-        capitao_limpo = sanitizar_texto(txt_capitao.value or "")
-        companhia_limpo = sanitizar_texto(txt_companhia.value or "")
-        peso_limpo = sanitizar_texto(txt_peso.value or "")
-        carga_custom_limpo = sanitizar_texto(txt_carga_customizada.value or "")
+    def _exibir_mensagem(mensagem: str, cor: str):
+        page.snack_bar = ft.SnackBar(ft.Text(mensagem), bgcolor=cor)
+        page.snack_bar.open = True
 
-        erros = validar_formulario_navio(
-            imo=imo_limpo,
-            nome=nome_limpo,
-            capitao=capitao_limpo,
-            companhia=companhia_limpo,
-            peso=peso_limpo,
-            categoria=dd_produto_carga.value or "",
-        )
+    def _limpar_formulario():
+        txt_imo.value = ""
+        txt_nome_navio.value = ""
+        txt_capitao.value = ""
+        txt_companhia.value = ""
+        txt_peso.value = ""
+        dd_produto_carga.value = None
+        txt_carga_customizada.value = ""
+        switch_docs.value = False
 
+    def _atualizar_erros_ui(erros: dict):
+        txt_imo.error_text = erros.get("imo")
+        txt_nome_navio.error_text = erros.get("nome")
+        txt_capitao.error_text = erros.get("capitao")
+        txt_companhia.error_text = erros.get("companhia")
+        txt_peso.error_text = erros.get("peso")
+        dd_produto_carga.error_text = erros.get("categoria")
+
+    def _validar_carga_custom(carga_custom_limpo: str, erros: dict):
+        txt_carga_customizada.error_text = None
         if dd_produto_carga.value == "OUTROS_PENDENTE":
             if not carga_custom_limpo:
                 txt_carga_customizada.error_text = (
@@ -152,38 +159,31 @@ def obter_view(page: ft.Page):
                     "A descrição deve ter no máximo 500 caracteres."
                 )
                 erros["categoria"] = "Descrição muito longa."
-            else:
-                txt_carga_customizada.error_text = None
-        else:
-            txt_carga_customizada.error_text = None
 
-        txt_imo.error_text = erros.get("imo")
-        txt_nome_navio.error_text = erros.get("nome")
-        txt_capitao.error_text = erros.get("capitao")
-        txt_companhia.error_text = erros.get("companhia")
-        txt_peso.error_text = erros.get("peso")
-        dd_produto_carga.error_text = erros.get("categoria")
+    def _preparar_dados_carga(carga_custom_limpo: str):
+        valor_dd = dd_produto_carga.value
+        if valor_dd == "OUTROS_PENDENTE":
+            return carga_custom_limpo, False, "OUTROS_PENDENTE"
+        eh_perecivel = valor_dd in [
+            "URGENTE_PERECIVEL",
+            "ALTA_PERECIBILIDADE",
+            "BAIXA_PERECIBILIDADE",
+        ]
+        return f"Carga: {valor_dd}", eh_perecivel, valor_dd
 
-        if erros:
-            page.update()
-            return
-
+    async def _submeter_cadastro(
+        imo_limpo,
+        nome_limpo,
+        capitao_limpo,
+        companhia_limpo,
+        peso_limpo,
+        carga_custom_limpo,
+    ):
         imo_formatado = f"IMO{imo_limpo}"
         peso = int(peso_limpo)
+        carga_desc, eh_perecivel, categoria = _preparar_dados_carga(carga_custom_limpo)
 
         try:
-            if dd_produto_carga.value == "OUTROS_PENDENTE":
-                carga_desc = carga_custom_limpo
-                eh_perecivel = False
-                categoria = "OUTROS_PENDENTE"
-            else:
-                carga_desc = f"Carga: {dd_produto_carga.value}"
-                eh_perecivel = dd_produto_carga.value in [
-                    "URGENTE_PERECIVEL",
-                    "ALTA_PERECIBILIDADE",
-                ]
-                categoria = dd_produto_carga.value
-
             async with obter_sessao_async() as session:
                 await solicitar_pre_cadastro(
                     session=session,
@@ -198,31 +198,50 @@ def obter_view(page: ft.Page):
                     possui_documentos=switch_docs.value,
                 )
 
-            page.snack_bar = ft.SnackBar(
-                ft.Text(
-                    f"Sucesso! Navio {nome_limpo.upper()} "
-                    f"({imo_formatado}) registrado como PENDENTE."
-                ),
-                bgcolor=ft.Colors.GREEN_700,
+            _exibir_mensagem(
+                f"Sucesso! Navio {nome_limpo.upper()} ({imo_formatado}) registrado como PENDENTE.",
+                ft.Colors.GREEN_700,
             )
-            page.snack_bar.open = True
-
-            txt_imo.value = ""
-            txt_nome_navio.value = ""
-            txt_capitao.value = ""
-            txt_companhia.value = ""
-            txt_peso.value = ""
-            dd_produto_carga.value = None
-            txt_carga_customizada.value = ""
-            switch_docs.value = False
+            _limpar_formulario()
 
         except Exception as erro:
-            page.snack_bar = ft.SnackBar(
-                ft.Text(f"Erro de persistência no banco: {erro}"),
-                bgcolor=ft.Colors.RED_700,
+            _exibir_mensagem(
+                f"Erro de persistência no banco: {erro}", ft.Colors.RED_700
             )
-            page.snack_bar.open = True
 
+    async def processar_submissao_cadastro(e):
+        imo_limpo = sanitizar_texto(txt_imo.value)
+        nome_limpo = sanitizar_texto(txt_nome_navio.value)
+        capitao_limpo = sanitizar_texto(txt_capitao.value)
+        companhia_limpo = sanitizar_texto(txt_companhia.value)
+        peso_limpo = sanitizar_texto(txt_peso.value)
+        carga_custom_limpo = sanitizar_texto(txt_carga_customizada.value)
+        categoria_selecionada = str(dd_produto_carga.value or "")
+
+        erros = validar_formulario_navio(
+            imo=imo_limpo,
+            nome=nome_limpo,
+            capitao=capitao_limpo,
+            companhia=companhia_limpo,
+            peso=peso_limpo,
+            categoria=categoria_selecionada,
+        )
+
+        _validar_carga_custom(carga_custom_limpo, erros)
+        _atualizar_erros_ui(erros)
+
+        if erros:
+            page.update()
+            return
+
+        await _submeter_cadastro(
+            imo_limpo,
+            nome_limpo,
+            capitao_limpo,
+            companhia_limpo,
+            peso_limpo,
+            carga_custom_limpo,
+        )
         page.update()
 
     btn_enviar = ft.Button(
@@ -266,6 +285,7 @@ def obter_view(page: ft.Page):
             border_radius=12,
             padding=40,
             content=ft.Column(
+                scroll=ft.ScrollMode.AUTO,
                 controls=[
                     ft.Row(
                         [

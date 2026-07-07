@@ -8,13 +8,15 @@ participant "app.py (CLI)" as CLI
 participant "controller_cadastros" as CtrlCad
 database "porto.db (SQLAlchemy)" as DB
 
+note over CtrlCad: Controlador opera de forma assíncrona\n(async/await com SQLAlchemy + aiosqlite)
+
 Crew -> CLI: Acessa Portal da Tripulação -> Solicitar Pré-Cadastro
 activate CLI
-CLI -> CtrlCad: solicitar_pre_cadastro(session, imo, nome, nome_capitao, companhia, carga_desc, categoria, peso, eh_perecivel, possui_documentos)
+CLI -> CtrlCad: solicitar_pre_cadastro(session, imo, nome, capitao, companhia, carga_desc, categoria, peso, eh_perecivel, possui_documentos)
 activate CtrlCad
 CtrlCad -> DB: Cria Navio com status padrão StatusNavio.PENDENTE
 CtrlCad -> DB: Salva Manifesto em Carga (documento_alfandega recebe a flag booleana)
-CtrlCad -> DB: session.commit()
+CtrlCad -> DB: await session.commit()
 CtrlCad --> CLI: Exibe mensagem de sucesso e protocolo gerado
 deactivate CtrlCad
 deactivate CLI

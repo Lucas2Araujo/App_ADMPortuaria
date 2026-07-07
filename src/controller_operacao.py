@@ -3,6 +3,9 @@ Módulo Controlador de Operações de Fila e Atracação.
 
 Este módulo processa a movimentação de navios, atracação em vagas livres e
 a geração de histórico (logs) das operações em tempo real.
+
+Todas as funções são co-rotinas (``async def``) e operam sobre uma
+``AsyncSession`` do SQLAlchemy com ``aiosqlite``.
 """
 
 from typing import Optional
@@ -15,16 +18,15 @@ from dto import OperacaoLogDTO, VagaDTO
 
 
 async def atracar_navio(session) -> Optional[OperacaoLogDTO]:
-    """
-    Busca o próximo navio da fila e o aloca na primeira vaga disponível.
-    Altera o status do navio, da vaga e gera o histórico de atracação.
+    """(Co-rotina) Retira o próximo navio da fila e o aloca na primeira vaga disponível.
 
     Args:
-        session (Session): Sessão ativa do SQLAlchemy conectada ao banco de dados.
+        session (AsyncSession): Sessão assíncrona.
 
     Returns:
-        OperacaoLogDTO | None: O log da atracação recém-registrada, ou `None` se falhar.
+        OperacaoLogDTO | None: Log da atracação, ou None se não houver navio/vaga.
     """
+    # Delega a seleção ao motor de fila para ordenamento SQL eficiente.
     navio = await obter_proximo_da_fila(session)
     if not navio:
         return None
@@ -54,17 +56,16 @@ async def atracar_navio(session) -> Optional[OperacaoLogDTO]:
 
 
 async def registrar_desatracacao(session, imo_id: str) -> Optional[OperacaoLogDTO]:
-    """
-    Busca a atracação em aberto para o navio, registra o fim da operação
-    e libera a vaga, mudando o status do navio para finalizado.
+    """(Co-rotina) Finaliza a atracação ativa de um navio e libera a vaga.
 
     Args:
-        session (Session): Sessão ativa do SQLAlchemy.
-        imo_id (str): O código IMO do navio que deve realizar a desatracação.
+        session (AsyncSession): Sessão assíncrona.
+        imo_id (str): Código IMO do navio.
 
     Returns:
-        OperacaoLogDTO | None: O log finalizado, ou `None` caso não encontre atracação ativa.
+        OperacaoLogDTO | None: Log da desatracação ou None.
     """
+    # Filtra apenas a atracação ativa para evitar sobreposição com históricos antigos.
     stmt = select(Atracacao).filter(
         Atracacao.navio_imo_id == imo_id, Atracacao.data_hora_fim.is_(None)
     )
@@ -74,6 +75,7 @@ async def registrar_desatracacao(session, imo_id: str) -> Optional[OperacaoLogDT
     if not atracacao:
         return None
 
+    # Estratégia de "soft close" para manter histórico completo das operações.
     atracacao.data_hora_fim = datetime.now()
 
     result_vaga = await session.execute(
@@ -86,6 +88,7 @@ async def registrar_desatracacao(session, imo_id: str) -> Optional[OperacaoLogDT
     result_navio = await session.execute(select(Navio).filter(Navio.imo_id == imo_id))
     navio = result_navio.scalars().first()
     if navio:
+        # FINALIZADO impede que o navio retorne à fila sem novo pré-cadastro.
         navio.status = StatusNavio.FINALIZADO
 
     await session.commit()
@@ -100,23 +103,30 @@ async def registrar_desatracacao(session, imo_id: str) -> Optional[OperacaoLogDT
 
 
 async def obter_painel_vagas_dto(session) -> list[VagaDTO]:
-    """
-    Retorna uma lista de DTOs contendo o status de cada vaga e o navio
-    atracado nela, se houver.
+    """(Co-rotina) Monta o painel de vagas detalhando os navios atracados.
+
+    Args:
+        session (AsyncSession): Sessão assíncrona.
+
+    Returns:
+        list[VagaDTO]: Lista de DTOs das vagas.
     """
     result = await session.execute(select(Vaga))
     vagas = result.scalars().all()
     if not vagas:
         return []
 
+    # Busca apenas as atracações ativas para não contaminar o status atual.
     result_atracacoes = await session.execute(
         select(Atracacao).filter(Atracacao.data_hora_fim.is_(None))
     )
     atracacoes_ativas = result_atracacoes.scalars().all()
+
     mapa_atracacoes = {a.vaga_id: a for a in atracacoes_ativas}
     imos_ativos = [a.navio_imo_id for a in atracacoes_ativas]
 
     if imos_ativos:
+        # Carrega os navios em lote e faz joinedload das cargas para evitar N+1 queries.
         stmt = (
             select(Navio)
             .options(joinedload(Navio.cargas))
@@ -143,6 +153,7 @@ async def obter_painel_vagas_dto(session) -> list[VagaDTO]:
                     )
                 )
             else:
+                # Fallback para inconsistência de banco: exibe vaga sem navio em vez de crashar.
                 vagas_dto.append(vaga.to_dto())
         else:
             vagas_dto.append(vaga.to_dto())
@@ -151,8 +162,13 @@ async def obter_painel_vagas_dto(session) -> list[VagaDTO]:
 
 
 async def obter_log_operacoes_dto(session) -> list[OperacaoLogDTO]:
-    """
-    Retorna a lista cronológica de eventos de operações ocorridos no porto.
+    """(Co-rotina) Retorna o histórico de todas as operações do porto.
+
+    Args:
+        session (AsyncSession): Sessão assíncrona.
+
+    Returns:
+        list[OperacaoLogDTO]: Lista cronológica (decrescente) de eventos.
     """
     stmt = select(Atracacao, Navio.nome).outerjoin(
         Navio, Atracacao.navio_imo_id == Navio.imo_id
@@ -189,8 +205,14 @@ async def obter_log_operacoes_dto(session) -> list[OperacaoLogDTO]:
 
 
 async def obter_contagem_atracacoes_dia(session, dias: int = 7) -> dict[str, int]:
-    """
-    Retorna a contagem de atracações por dia para os últimos `dias`.
+    """(Co-rotina) Retorna a contagem diária de atracações para os últimos N dias.
+
+    Args:
+        session (AsyncSession): Sessão assíncrona.
+        dias (int): Janela de tempo a considerar.
+
+    Returns:
+        dict[str, int]: Dicionário de data (ISO) para total de atracações.
     """
     from sqlalchemy import func
     from datetime import datetime, timedelta
@@ -213,8 +235,11 @@ async def obter_contagem_atracacoes_dia(session, dias: int = 7) -> dict[str, int
 
 
 async def liberar_vaga_individual(session, vaga_id: int):
-    """
-    Libera uma vaga específica, desatracando o navio atual se houver.
+    """(Co-rotina) Libera uma vaga específica, desatracando o navio.
+
+    Args:
+        session (AsyncSession): Sessão assíncrona.
+        vaga_id (int): ID primário da vaga.
     """
     result = await session.execute(select(Vaga).filter(Vaga.id == vaga_id))
     vaga = result.scalars().first()
@@ -238,8 +263,13 @@ async def liberar_vaga_individual(session, vaga_id: int):
 
 
 async def obter_contadores_dashboard(session) -> dict:
-    """
-    Retorna estatísticas rápidas sobre vagas e navios.
+    """(Co-rotina) Agrega as estatísticas resumidas do porto.
+
+    Args:
+        session (AsyncSession): Sessão assíncrona.
+
+    Returns:
+        dict: Chaves: vagas_livres, total_vagas, total_validado, total_pendente, total_finalizado.
     """
     from sqlalchemy import func
 

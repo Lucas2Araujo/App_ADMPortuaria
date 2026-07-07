@@ -188,5 +188,5 @@ class HistoricoView(ft.Container):
             print(f"Erro ao carregar histórico: {err}")
 
 
-def obter_view(page: ft.Page, session=None):
+def obter_view(page: ft.Page):
     return HistoricoView(page)

@@ -18,7 +18,9 @@ import unittest
 # Ajuste de sys.path para funcionar tanto ao rodar com `pytest src/` quanto
 # diretamente com `python src/test_gui.py`.
 # ---------------------------------------------------------------------------
-_DIR_TEST = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # src/
+_DIR_TEST = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)  # src/
 _DIR_GUI = os.path.join(_DIR_TEST, "gui")  # src/gui/
 _DIR_TELAS = os.path.join(_DIR_GUI, "telas")  # src/gui/telas/
 

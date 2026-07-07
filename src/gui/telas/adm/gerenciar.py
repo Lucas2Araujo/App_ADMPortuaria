@@ -75,7 +75,7 @@ class GerenciarView(ft.Container):
         self.edit_nome = ft.TextField(label="Nome do Navio", width=300)
         self.edit_capitao = ft.TextField(label="Nome do Capitão", width=300)
         self.edit_companhia = ft.TextField(label="Companhia", width=300)
-        self.btn_salvar_edicao = ft.ElevatedButton(
+        self.btn_salvar_edicao = ft.Button(
             "Salvar Alterações",
             icon=ft.Icons.SAVE,
             on_click=lambda e: self._page.run_task(self.submit_edicao_navio),
@@ -572,7 +572,6 @@ class GerenciarView(ft.Container):
         self._page.update()
 
     async def processar_exclusao_backend(self, e=None):
-        print(f"[DEBUG] Iniciando exclusão do imo: {self.imo_para_excluir}")
         self.dialogo_confirmar_exclusao.open = False
         self._page.update()
 
@@ -583,7 +582,6 @@ class GerenciarView(ft.Container):
                 await excluir_registro_navio(session, self.imo_para_excluir)
                 msg = f"Sucesso: Registro do navio ({self.imo_para_excluir}) foi excluído definitivamente."
                 status_cor = ft.Colors.GREEN
-                print("[DEBUG] Exclusão concluída com sucesso.")
         except Exception as err:
             msg = f"{err}"
             status_cor = ft.Colors.ORANGE
@@ -694,6 +692,7 @@ class GerenciarView(ft.Container):
             eh_perecivel = self.campo_categoria.value in [
                 "URGENTE_PERECIVEL",
                 "ALTA_PERECIBILIDADE",
+                "BAIXA_PERECIBILIDADE",
             ]
             async with obter_sessao_async() as session:
                 await solicitar_pre_cadastro(
@@ -734,22 +733,11 @@ class GerenciarView(ft.Container):
 
         navios = self._todos_navios_cache
 
-        if self.campo_limite_navios.value != "TODOS":
-            try:
-                limite = int(self.campo_limite_navios.value)
-                navios = navios[:limite]
-            except ValueError:
-                navios = navios[:100]
+        # Filtra por texto PRIMEIRO (antes de aplicar o limite)
+        navios = self._filtrar_navios_por_busca(navios)
 
-        if hasattr(self, "txt_busca_navio") and self.txt_busca_navio.value:
-            busca = self.txt_busca_navio.value.lower()
-            navios = [
-                n
-                for n in navios
-                if busca in n.nome.lower()
-                or busca in n.imo_id.lower()
-                or busca in getattr(n, "companhia", "").lower()
-            ]
+        # Aplica o limite DEPOIS de filtrar
+        navios = self._aplicar_limite_navios(navios)
 
         # Check if rebuild is necessary
         current_hash = hash(
@@ -769,147 +757,167 @@ class GerenciarView(ft.Container):
 
         self._last_navios_hash = current_hash
 
-        novas_linhas_navios = []
-        for navio in navios:
-            capitao_nome = navio.nome_capitao
-
-            btn_editar = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Icon(ft.Icons.EDIT, size=14, color="#163d6e"),
-                        ft.Text(
-                            "Editar",
-                            size=12,
-                            color="#163d6e",
-                            weight=ft.FontWeight.W_500,
-                        ),
-                    ],
-                    spacing=4,
-                ),
-                bgcolor="transparent",
-                padding=ft.padding.symmetric(horizontal=10, vertical=6),
-                border_radius=8,
-                ink=True,
-                on_click=lambda e, n=navio: self.abrir_edicao_navio(n),
-                on_hover=lambda e: (
-                    setattr(
-                        e.control,
-                        "bgcolor",
-                        "#e8eef6" if e.data == "true" else "transparent",
-                    ),
-                    e.control.update(),
-                ),
-            )
-
-            btn_excluir = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Icon(ft.Icons.DELETE_OUTLINE, size=14, color="#dc2626"),
-                        ft.Text(
-                            "Excluir",
-                            size=12,
-                            color="#dc2626",
-                            weight=ft.FontWeight.W_500,
-                        ),
-                    ],
-                    spacing=4,
-                ),
-                bgcolor="transparent",
-                padding=ft.padding.symmetric(horizontal=10, vertical=6),
-                border_radius=8,
-                ink=True,
-                on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao_exclusao(
-                    imo, nome
-                ),
-                on_hover=lambda e: (
-                    setattr(
-                        e.control,
-                        "bgcolor",
-                        "#fee2e2" if e.data == "true" else "transparent",
-                    ),
-                    e.control.update(),
-                ),
-            )
-
-            if navio.status == "VALIDADO":
-                status_bg = "#f0fdf4"
-                status_color = "#16a34a"
-            elif navio.status == "PENDENTE":
-                status_bg = "#fffbeb"
-                status_color = "#d97706"
-            else:
-                status_bg = "#f5f5f5"
-                status_color = "#757575"
-
-            novas_linhas_navios.append(
-                ft.DataRow(
-                    cells=[
-                        ft.DataCell(
-                            ft.Text(
-                                navio.imo_id,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                size=12,
-                                weight=ft.FontWeight.W_600,
-                            )
-                        ),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(
-                                    navio.nome,
-                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                    max_lines=1,
-                                    color=ft.Colors.ON_SURFACE,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-                                width=150,
-                                tooltip=navio.nome,
-                            )
-                        ),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(
-                                    capitao_nome,
-                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                    max_lines=1,
-                                    color=ft.Colors.ON_SURFACE_VARIANT,
-                                    size=14,
-                                ),
-                                width=130,
-                                tooltip=capitao_nome,
-                            )
-                        ),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(
-                                    getattr(navio, "companhia", "N/A"),
-                                    overflow=ft.TextOverflow.ELLIPSIS,
-                                    max_lines=1,
-                                    color=ft.Colors.ON_SURFACE_VARIANT,
-                                    size=14,
-                                ),
-                                width=160,
-                                tooltip=getattr(navio, "companhia", "N/A"),
-                            )
-                        ),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(
-                                    navio.status,
-                                    color=status_color,
-                                    size=10,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-                                bgcolor=status_bg,
-                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
-                                border_radius=4,
-                            )
-                        ),
-                        ft.DataCell(ft.Row([btn_editar, btn_excluir], spacing=8)),
-                    ]
-                )
-            )
+        novas_linhas_navios = [self._criar_linha_navio(n) for n in navios]
         self.tabela_navios.rows = novas_linhas_navios
         self._page.update()
+
+    def _filtrar_navios_por_busca(self, navios):
+        if hasattr(self, "txt_busca_navio") and self.txt_busca_navio.value:
+            busca = self.txt_busca_navio.value.lower()
+            return [
+                n
+                for n in navios
+                if busca in n.nome.lower()
+                or busca in n.imo_id.lower()
+                or busca in getattr(n, "companhia", "").lower()
+            ]
+        return navios
+
+    def _aplicar_limite_navios(self, navios):
+        if self.campo_limite_navios.value != "TODOS":
+            try:
+                limite = int(self.campo_limite_navios.value)
+                return navios[:limite]
+            except ValueError:
+                return navios[:100]
+        return navios
+
+    def _criar_linha_navio(self, navio):
+        capitao_nome = navio.nome_capitao
+
+        btn_editar = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.EDIT, size=14, color="#163d6e"),
+                    ft.Text(
+                        "Editar",
+                        size=12,
+                        color="#163d6e",
+                        weight=ft.FontWeight.W_500,
+                    ),
+                ],
+                spacing=4,
+            ),
+            bgcolor="transparent",
+            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            border_radius=8,
+            ink=True,
+            on_click=lambda e, n=navio: self.abrir_edicao_navio(n),
+            on_hover=lambda e: (
+                setattr(
+                    e.control,
+                    "bgcolor",
+                    "#e8eef6" if e.data == "true" else "transparent",
+                ),
+                e.control.update(),
+            ),
+        )
+
+        btn_excluir = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.DELETE_OUTLINE, size=14, color="#dc2626"),
+                    ft.Text(
+                        "Excluir",
+                        size=12,
+                        color="#dc2626",
+                        weight=ft.FontWeight.W_500,
+                    ),
+                ],
+                spacing=4,
+            ),
+            bgcolor="transparent",
+            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            border_radius=8,
+            ink=True,
+            on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao_exclusao(
+                imo, nome
+            ),
+            on_hover=lambda e: (
+                setattr(
+                    e.control,
+                    "bgcolor",
+                    "#fee2e2" if e.data == "true" else "transparent",
+                ),
+                e.control.update(),
+            ),
+        )
+
+        if navio.status == "VALIDADO":
+            status_bg = "#f0fdf4"
+            status_color = "#16a34a"
+        elif navio.status == "PENDENTE":
+            status_bg = "#fffbeb"
+            status_color = "#d97706"
+        else:
+            status_bg = "#f5f5f5"
+            status_color = "#757575"
+
+        return ft.DataRow(
+            cells=[
+                ft.DataCell(
+                    ft.Text(
+                        navio.imo_id,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        size=12,
+                        weight=ft.FontWeight.W_600,
+                    )
+                ),
+                ft.DataCell(
+                    ft.Container(
+                        content=ft.Text(
+                            navio.nome,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            max_lines=1,
+                            color=ft.Colors.ON_SURFACE,
+                            weight=ft.FontWeight.BOLD,
+                        ),
+                        width=150,
+                        tooltip=navio.nome,
+                    )
+                ),
+                ft.DataCell(
+                    ft.Container(
+                        content=ft.Text(
+                            capitao_nome,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            max_lines=1,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            size=14,
+                        ),
+                        width=130,
+                        tooltip=capitao_nome,
+                    )
+                ),
+                ft.DataCell(
+                    ft.Container(
+                        content=ft.Text(
+                            getattr(navio, "companhia", "N/A"),
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            max_lines=1,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            size=14,
+                        ),
+                        width=160,
+                        tooltip=getattr(navio, "companhia", "N/A"),
+                    )
+                ),
+                ft.DataCell(
+                    ft.Container(
+                        content=ft.Text(
+                            navio.status,
+                            color=status_color,
+                            size=10,
+                            weight=ft.FontWeight.BOLD,
+                        ),
+                        bgcolor=status_bg,
+                        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                        border_radius=4,
+                    )
+                ),
+                ft.DataCell(ft.Row([btn_editar, btn_excluir], spacing=8)),
+            ]
+        )
 
     async def atualizar(self, e=None):
         try:

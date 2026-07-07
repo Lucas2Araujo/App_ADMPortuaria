@@ -9,12 +9,14 @@ participant "controller_operacao" as CtrlOp
 participant "ord_propriety" as MotorFila
 database "porto.db (SQLAlchemy)" as DB
 
+note over CtrlCad, CtrlOp: Controladores operam de forma assíncrona\n(async/await com SQLAlchemy + aiosqlite)
+
 Admin -> CLI: Escolhe Registrar Navio (Manifesto Perecível)
 activate CLI
 CLI -> CtrlCad: solicitar_pre_cadastro(..., eh_perecivel=True, possui_documentos=True)
 activate CtrlCad
 CtrlCad -> DB: Cria Navio e Carga com eh_perecivel=True e documento_alfandega=True
-CtrlCad -> DB: session.commit()
+CtrlCad -> DB: await session.commit()
 CtrlCad --> CLI: Pré-cadastro realizado com sucesso
 deactivate CtrlCad
 
@@ -22,7 +24,7 @@ Admin -> CLI: Escolhe Auditar e Validar
 CLI -> CtrlCad: auditar_solicitacoes_pendentes(session)
 activate CtrlCad
 CtrlCad -> DB: Altera status para StatusNavio.VALIDADO
-CtrlCad -> DB: session.commit()
+CtrlCad -> DB: await session.commit()
 CtrlCad --> CLI: Navio enviado para a fila oficial
 deactivate CtrlCad
 
@@ -39,7 +41,7 @@ deactivate MotorFila
 CtrlOp -> DB: Localiza Vaga com status == StatusVaga.LIVRE
 CtrlOp -> DB: Modifica entidades (navio=ATRACADO, vaga=OCUPADA)
 CtrlOp -> DB: Registra histórico na tabela Atracacao
-CtrlOp -> DB: session.commit()
+CtrlOp -> DB: await session.commit()
 CtrlOp --> CLI: Alerta: Navio prioritário alocado no terminal!
 deactivate CtrlOp
 deactivate CLI

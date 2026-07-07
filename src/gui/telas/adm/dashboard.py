@@ -9,6 +9,7 @@ class DashboardView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__(expand=True)
         self._page = page
+        self._active = False  # lifecycle flag — stops loop on logout
 
         # State elements
         self.txt_vagas = ft.Text(
@@ -153,8 +154,12 @@ class DashboardView(ft.Container):
 
     def did_mount(self):
         """Called by Flet after this control is added to the page tree."""
+        self._active = True
         self._page.run_task(self.atualizar)
         self._page.run_task(self.auto_refresh_loop)
+
+    def will_unmount(self):
+        self._active = False
 
     def criar_caixa(self, titulo, icone, controles_lista):
         return ft.Container(
@@ -234,72 +239,74 @@ class DashboardView(ft.Container):
         self.txt_pendentes.value = str(counts["total_pendente"])
         self.txt_concluidos.value = str(counts["total_finalizado"])
 
-        # Update queue preview
+        await self._atualizar_fila(session)
+        await self._atualizar_vagas(session)
+        await self._atualizar_grafico(session)
+        await self._atualizar_logs(session)
+
+    async def _atualizar_fila(self, session):
+        """Update queue preview panel."""
         from ord_propriety import obter_fila_atracacao_dto
 
         fila = await obter_fila_atracacao_dto(session)
         proximos = fila[:10]  # Alterado para 10 como solicitado
-        novos_proximos = []
         if not proximos:
-            novos_proximos.append(
+            self.coluna_proximos.controls = [
                 ft.Text(
                     "A fila está vazia no momento.",
                     size=13,
                     italic=True,
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 )
-            )
+            ]
         else:
-            for idx, p in enumerate(proximos):
-                novos_proximos.append(
-                    ft.Text(
-                        f"{idx+1}º - {p.nome}",
-                        size=13,
-                        weight=ft.FontWeight.W_500,
-                        color=ft.Colors.ON_SURFACE,
-                        overflow=ft.TextOverflow.ELLIPSIS,
-                        max_lines=1,
-                    )
+            self.coluna_proximos.controls = [
+                ft.Text(
+                    f"{idx+1}º - {p.nome}",
+                    size=13,
+                    weight=ft.FontWeight.W_500,
+                    color=ft.Colors.ON_SURFACE,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                    max_lines=1,
                 )
-        self.coluna_proximos.controls = novos_proximos
+                for idx, p in enumerate(proximos)
+            ]
 
-        # Update berths status preview
+    async def _atualizar_vagas(self, session):
+        """Update berths status preview panel."""
         from controller_operacao import obter_painel_vagas_dto
 
         vagas = await obter_painel_vagas_dto(session)
-        novas_vagas = []
-        for v in vagas:
-            if v.status == "LIVRE":
-                novas_vagas.append(
-                    ft.Row(
-                        [
-                            ft.Icon(ft.Icons.CHECK_CIRCLE, color="#10b981", size=14),
-                            ft.Text(
-                                f"Berço {v.id}: Livre",
-                                size=13,
-                                color="#10b981",
-                                weight=ft.FontWeight.W_600,
-                            ),
-                        ]
-                    )
-                )
-            else:
-                novas_vagas.append(
-                    ft.Row(
-                        [
-                            ft.Icon(ft.Icons.CANCEL, color="#ef4444", size=14),
-                            ft.Text(
-                                f"Berço {v.id}: Ocupado",
-                                size=13,
-                                color="#ef4444",
-                                weight=ft.FontWeight.W_500,
-                            ),
-                        ]
-                    )
-                )
-        self.coluna_vagas.controls = novas_vagas
+        self.coluna_vagas.controls = [self._linha_vaga(v) for v in vagas]
 
-        # Update chart
+    def _linha_vaga(self, v):
+        """Build a single berth status row widget."""
+        if v.status == "LIVRE":
+            return ft.Row(
+                [
+                    ft.Icon(ft.Icons.CHECK_CIRCLE, color="#10b981", size=14),
+                    ft.Text(
+                        f"Berço {v.id}: Livre",
+                        size=13,
+                        color="#10b981",
+                        weight=ft.FontWeight.W_600,
+                    ),
+                ]
+            )
+        return ft.Row(
+            [
+                ft.Icon(ft.Icons.CANCEL, color="#ef4444", size=14),
+                ft.Text(
+                    f"Berço {v.id}: Ocupado",
+                    size=13,
+                    color="#ef4444",
+                    weight=ft.FontWeight.W_500,
+                ),
+            ]
+        )
+
+    async def _atualizar_grafico(self, session):
+        """Update the weekly docking bar chart."""
         from controller_operacao import obter_contagem_atracacoes_dia
 
         hoje_date = datetime.now().date()
@@ -340,64 +347,47 @@ class DashboardView(ft.Container):
             )
         self.grafico_row.controls = novo_grafico
 
-        # Update logs
+    async def _atualizar_logs(self, session):
+        """Update the recent operations log panel."""
         from controller_operacao import obter_log_operacoes_dto
 
         eventos_log = (await obter_log_operacoes_dto(session))[:10]
-        novos_logs = []
         if not eventos_log:
-            novos_logs.append(
+            self.coluna_logs.controls = [
                 ft.Text(
                     "Nenhuma operação registrada.",
                     size=13,
                     italic=True,
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 )
-            )
+            ]
         else:
-            for ev in eventos_log:
-                hora_ev = ev.data_hora.strftime("%d/%m %H:%M")
-                if ev.tipo == "DESATRACAO":
-                    novos_logs.append(
-                        ft.Row(
-                            [
-                                ft.Icon(
-                                    ft.Icons.ARROW_UPWARD, color="#ef4444", size=14
-                                ),
-                                ft.Container(
-                                    content=ft.Text(
-                                        f"Saída: {ev.navio_nome} (B{ev.vaga_id}) — {hora_ev}",
-                                        size=12,
-                                        color=ft.Colors.ON_SURFACE_VARIANT,
-                                        overflow=ft.TextOverflow.ELLIPSIS,
-                                        max_lines=1,
-                                    ),
-                                    expand=True,
-                                ),
-                            ]
-                        )
-                    )
-                else:
-                    novos_logs.append(
-                        ft.Row(
-                            [
-                                ft.Icon(
-                                    ft.Icons.ARROW_DOWNWARD, color="#10b981", size=14
-                                ),
-                                ft.Container(
-                                    content=ft.Text(
-                                        f"Entrada: {ev.navio_nome} (B{ev.vaga_id}) — {hora_ev}",
-                                        size=12,
-                                        color=ft.Colors.ON_SURFACE_VARIANT,
-                                        overflow=ft.TextOverflow.ELLIPSIS,
-                                        max_lines=1,
-                                    ),
-                                    expand=True,
-                                ),
-                            ]
-                        )
-                    )
-        self.coluna_logs.controls = novos_logs
+            self.coluna_logs.controls = [self._linha_log(ev) for ev in eventos_log]
+
+    def _linha_log(self, ev):
+        """Build a single log entry row widget."""
+        hora_ev = ev.data_hora.strftime("%d/%m %H:%M")
+        if ev.tipo == "DESATRACAO":
+            icon = ft.Icon(ft.Icons.ARROW_UPWARD, color="#ef4444", size=14)
+            texto = f"Saída: {ev.navio_nome} (B{ev.vaga_id}) — {hora_ev}"
+        else:
+            icon = ft.Icon(ft.Icons.ARROW_DOWNWARD, color="#10b981", size=14)
+            texto = f"Entrada: {ev.navio_nome} (B{ev.vaga_id}) — {hora_ev}"
+        return ft.Row(
+            [
+                icon,
+                ft.Container(
+                    content=ft.Text(
+                        texto,
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                        max_lines=1,
+                    ),
+                    expand=True,
+                ),
+            ]
+        )
 
     async def atualizar(self, e=None):
         try:
@@ -408,9 +398,11 @@ class DashboardView(ft.Container):
             print(f"Erro ao carregar dados do dashboard: {err}")
 
     async def auto_refresh_loop(self):
-        while True:
+        while self._active:
             await asyncio.sleep(5)
             try:
+                if not self._active:
+                    break
                 if getattr(self._page, "active_tab", None) == "dashboard":
                     await self.atualizar()
             except Exception:

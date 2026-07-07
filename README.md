@@ -81,24 +81,33 @@ Para facilitar a avaliação e o uso em computadores sem Python instalado, o sis
 
 #### 🐧 Linux (Ubuntu, Nobara, Fedora, Debian, etc.)
 
-1. Baixe o arquivo `Adm_Porto` correspondente ao Linux.
+1. Baixe o arquivo desejado (`Adm_Porto_GUI` para interface gráfica ou `Adm_Porto` para linha de comando).
 2. Conceda permissão de execução e rode:
 
 ```bash
+# Para a versão com Interface Gráfica (Recomendado):
+chmod +x Adm_Porto_GUI
+./Adm_Porto_GUI
+
+# Para a versão de Linha de Comando (CLI):
 chmod +x Adm_Porto
 ./Adm_Porto
 ```
 
 #### 💻 Windows (10 e 11)
 
-1. Baixe o arquivo `Adm_Porto.exe`.
+1. Baixe o arquivo desejado (`Adm_Porto_GUI.exe` para interface gráfica ou `Adm_Porto.exe` para linha de comando).
 2. Abra o Prompt de Comando ou PowerShell na pasta do arquivo e execute:
 
 ```dos
+# Para a versão com Interface Gráfica (Recomendado):
+.\Adm_Porto_GUI.exe
+
+# Para a versão de Linha de Comando (CLI):
 .\Adm_Porto.exe
 ```
 
-> Se preferir, também é possível dar um duplo clique diretamente sobre o arquivo no Explorador de Arquivos.
+> Se preferir, também é possível dar um duplo clique diretamente sobre o arquivo (principalmente na versão GUI) no Explorador de Arquivos.
 
 > [!WARNING]
 > **SmartScreen / Windows Defender:** Como o software foi empacotado via PyInstaller sem assinatura digital comercial, o Windows pode exibir um alerta preventivo (falso positivo). Clique em **"Mais informações"** → **"Executar assim mesmo"** para prosseguir com segurança.
@@ -125,6 +134,9 @@ pip install -r src/requirements.txt
 # 5. (Opcional) Popule o banco com dados simulados
 python src/pop_bd.py
 
-# 6. Inicie a aplicação
+# 6. Inicie a aplicação (Interface Gráfica - Recomendado)
+python src/app_gui.py
+
+# Ou, se preferir iniciar a versão de linha de comando (CLI):
 python src/app.py
 ```

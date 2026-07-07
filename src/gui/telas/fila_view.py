@@ -3,6 +3,7 @@ import sys
 import flet as ft
 import gui.compat
 import asyncio
+import math
 from cad import obter_sessao_async
 from ord_propriety import obter_fila_atracacao_dto
 
@@ -17,6 +18,7 @@ class FilaView(ft.Container):
     def __init__(self, page: ft.Page):
         super().__init__(expand=True)
         self._page = page
+        self._active = False  # lifecycle flag — stops loop on logout
 
         # Table showing the queue of ships
         self.tabela_fila = ft.DataTable(
@@ -70,6 +72,65 @@ class FilaView(ft.Container):
         )
         self._page.overlay.append(self.dialogo_detalhes)
 
+        # Configuração da Paginação
+        self.pagina_atual = 1
+        self.itens_por_pagina = 10
+        self.total_paginas = 1
+
+        self.btn_anterior = ft.IconButton(
+            icon=ft.Icons.NAVIGATE_BEFORE,
+            tooltip="Página Anterior",
+            on_click=self.pagina_anterior,
+            disabled=True,
+        )
+        self.txt_pagina = ft.Text("Página 1 de 1", size=13, weight=ft.FontWeight.BOLD)
+        self.btn_proximo = ft.IconButton(
+            icon=ft.Icons.NAVIGATE_NEXT,
+            tooltip="Próxima Página",
+            on_click=self.proxima_pagina,
+            disabled=True,
+        )
+        self.txt_paginas_info = ft.Text(
+            "Exibindo 0-0 de 0 itens", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+        )
+
+        self.dropdown_limite = ft.Dropdown(
+            options=[
+                ft.dropdown.Option("10", text="10 por página"),
+                ft.dropdown.Option("25", text="25 por página"),
+                ft.dropdown.Option("50", text="50 por página"),
+                ft.dropdown.Option("todos", text="Todos"),
+            ],
+            value="10",
+            on_select=self.alterar_limite,
+            width=150,
+            height=40,
+            text_size=12,
+            content_padding=ft.padding.symmetric(horizontal=10, vertical=0),
+        )
+
+        self.row_paginacao = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Row(
+                        [self.txt_paginas_info, self.dropdown_limite],
+                        spacing=20,
+                        alignment=ft.MainAxisAlignment.START,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Row(
+                        [self.btn_anterior, self.txt_pagina, self.btn_proximo],
+                        spacing=10,
+                        alignment=ft.MainAxisAlignment.END,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            padding=ft.padding.symmetric(horizontal=20, vertical=10),
+            border=ft.border.only(top=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+        )
+
         # Counter text
         self.txt_contador = ft.Text(
             "0 navios aguardando", size=14, color=ft.Colors.ON_SURFACE_VARIANT
@@ -118,7 +179,14 @@ class FilaView(ft.Container):
                         clip_behavior=ft.ClipBehavior.HARD_EDGE,
                         content=ft.Stack(
                             [
-                                self.tabela_scroll,
+                                ft.Column(
+                                    [
+                                        self.tabela_scroll,
+                                        self.row_paginacao,
+                                    ],
+                                    spacing=0,
+                                    expand=True,
+                                ),
                                 self.txt_vazio,
                             ],
                             expand=True,
@@ -131,8 +199,12 @@ class FilaView(ft.Container):
         )
 
     def did_mount(self):
+        self._active = True
         self._page.run_task(self.carregar_dados_fila)
         self._page.run_task(self.auto_refresh_loop)
+
+    def will_unmount(self):
+        self._active = False
 
     def fechar_dialogo(self, e):
         """Closes the ship details dialog."""
@@ -141,9 +213,6 @@ class FilaView(ft.Container):
 
     def abrir_detalhes_navio(self, navio, posicao):
         """Builds and opens the details dialog for a given ship."""
-        print(
-            f"[DEBUG] Gerando ficha técnica do navio {navio.nome} (Posição: {posicao})..."
-        )
 
         capitao = getattr(
             navio, "nome_capitao", getattr(navio, "capitao", "Não informado")
@@ -165,6 +234,11 @@ class FilaView(ft.Container):
             if (navio.cargas and any(c.eh_perecivel for c in navio.cargas))
             else "Não"
         )
+        descricao_carga = (
+            " | ".join(c.descricao for c in navio.cargas if c.descricao)
+            if navio.cargas
+            else "N/A"
+        )
         score = f"{navio.score:.2f}"
 
         self.dialogo_detalhes.title = ft.Text(
@@ -182,6 +256,7 @@ class FilaView(ft.Container):
                 ft.Text(f"Companhia / Armador: {navio.companhia}", size=14),
                 ft.Text(f"Peso Declarado: {peso}", size=14),
                 ft.Text(f"Categoria Logística: {categoria}", size=14),
+                ft.Text(f"Descrição da Carga: {descricao_carga}", size=14),
                 ft.Text(f"Carga Perecível: {perecivel}", size=14),
                 ft.Text(f"Documentação Alfandegária: {documentos}", size=14),
                 ft.Text(
@@ -207,6 +282,25 @@ class FilaView(ft.Container):
         e.control.bgcolor = "#163d6e" if e.data == "true" else "#0d2b4e"
         e.control.update()
 
+    def pagina_anterior(self, e):
+        if self.pagina_atual > 1:
+            self.pagina_atual -= 1
+            self._page.run_task(self.carregar_dados_fila)
+
+    def proxima_pagina(self, e):
+        if self.pagina_atual < self.total_paginas:
+            self.pagina_atual += 1
+            self._page.run_task(self.carregar_dados_fila)
+
+    def alterar_limite(self, e):
+        limite_val = self.dropdown_limite.value
+        if limite_val == "todos":
+            self.itens_por_pagina = 1000000
+        else:
+            self.itens_por_pagina = int(limite_val)
+        self.pagina_atual = 1
+        self._page.run_task(self.carregar_dados_fila)
+
     async def carregar_dados_fila(self, e=None):
         """Loads mooring queue data asynchronously from the database."""
         try:
@@ -221,16 +315,43 @@ class FilaView(ft.Container):
                     self.txt_vazio.visible = True
                     self.tabela_scroll.visible = False
                     self.tabela_fila.rows = []
+                    self.row_paginacao.visible = False
                 else:
                     self.txt_vazio.visible = False
                     self.tabela_scroll.visible = True
+                    self.row_paginacao.visible = True
+
+                    total_itens = len(navios)
+                    limite = self.itens_por_pagina
+                    self.total_paginas = max(1, (total_itens + limite - 1) // limite)
+
+                    if self.pagina_atual > self.total_paginas:
+                        self.pagina_atual = self.total_paginas
+
+                    inicio = (self.pagina_atual - 1) * limite
+                    fim = min(inicio + limite, total_itens)
+                    navios_pagina = navios[inicio:fim]
 
                     novas_linhas = []
-                    for idx, navio in enumerate(navios):
-                        posicao = idx + 1
+                    for idx, navio in enumerate(navios_pagina):
+                        posicao = inicio + idx + 1
                         linha = self._criar_linha_navio(navio, posicao)
                         novas_linhas.append(linha)
                     self.tabela_fila.rows = novas_linhas
+
+                    # Atualizar controles de paginação
+                    self.txt_pagina.value = (
+                        f"Página {self.pagina_atual} de {self.total_paginas}"
+                    )
+                    self.btn_anterior.disabled = self.pagina_atual <= 1
+                    self.btn_proximo.disabled = self.pagina_atual >= self.total_paginas
+
+                    limite_texto = (
+                        "Todos" if limite >= 1000000 else f"{inicio + 1}-{fim}"
+                    )
+                    self.txt_paginas_info.value = (
+                        f"Exibindo {limite_texto} de {total_itens} itens"
+                    )
 
                 self._page.update()
         except Exception as erro:
@@ -344,9 +465,11 @@ class FilaView(ft.Container):
 
     async def auto_refresh_loop(self):
         """Asynchronous loop that refreshes the queue data periodically."""
-        while True:
+        while self._active:
             await asyncio.sleep(2)
             try:
+                if not self._active:
+                    break
                 if getattr(self._page, "active_tab", None) == "fila":
                     await self.carregar_dados_fila()
             except Exception:

@@ -1,6 +1,7 @@
 import os
 import re
 import asyncio
+from datetime import datetime
 from pathlib import Path
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -118,13 +119,15 @@ async def _obter_carga():
         for key, (desc, _, _) in menu_cargas.items():
             print(f"[{key}] {desc}")
 
-        opcao = (await async_input("Selecione o tipo de carga (1-10): ")).strip()
+        opcao = (
+            await async_input("Selecione o tipo de carga (1-9 ou 0 para Outros): ")
+        ).strip()
         if opcao in menu_cargas:
             desc_padrao, categoria, eh_perecivel = menu_cargas[opcao]
             if opcao == "0":
                 return await _obter_descricao_personalizada(), categoria, eh_perecivel
             return desc_padrao, categoria, eh_perecivel
-        print("Erro: Opção inválida. Escolha um número de 1 a 10 ou 0.")
+        print("Erro: Opção inválida. Escolha um número de 1 a 9 ou 0 para 'Outros'.")
 
 
 async def _obter_peso():
@@ -532,8 +535,6 @@ async def mostrar_fila_atracacao(session):
 
     for pos, navio in enumerate(fila, start=1):
         if navio.data_solicitacao:
-            from datetime import datetime
-
             espera = datetime.now() - navio.data_solicitacao
             espera_str = str(espera).split(".")[0]
         else:

@@ -9,12 +9,14 @@ participant "controller_operacao" as CtrlOp
 participant "ord_propriety" as MotorFila
 database "porto.db (SQLAlchemy)" as DB
 
+note over CtrlCad, CtrlOp: Controladores operam de forma assíncrona\n(async/await com SQLAlchemy + aiosqlite)
+
 Admin -> CLI: Escolhe Registrar Navio Manualmente (Balcão)
 activate CLI
 CLI -> CtrlCad: solicitar_pre_cadastro(session, imo, nome, capitao, companhia, carga_desc, categoria, peso, eh_perecivel=False, possui_documentos=True)
 activate CtrlCad
 CtrlCad -> DB: Instancia Navio(status=PENDENTE) e Carga(eh_perecivel=False, documento_alfandega=True)
-CtrlCad -> DB: session.add() & session.commit()
+CtrlCad -> DB: await session.add() & await session.commit()
 CtrlCad --> CLI: Confirmação de Pré-Cadastro
 deactivate CtrlCad
 
@@ -25,7 +27,7 @@ CtrlCad -> DB: Busca Navios com status == StatusNavio.PENDENTE
 CtrlCad -> CtrlCad: _auditar_documentacao_navio(navio)
 note right: Verifica se\ncarga.documento_alfandega == True
 CtrlCad -> DB: Atualiza navio.status = StatusNavio.VALIDADO
-CtrlCad -> DB: session.commit()
+CtrlCad -> DB: await session.commit()
 CtrlCad --> CLI: Navio aprovado para a Fila Oficial
 deactivate CtrlCad
 
@@ -43,7 +45,7 @@ CtrlOp -> DB: Busca primeira Vaga com status == StatusVaga.LIVRE
 CtrlOp -> DB: Atualiza navio.status = StatusNavio.ATRACADO
 CtrlOp -> DB: Atualiza vaga.status = StatusVaga.OCUPADA
 CtrlOp -> DB: Cria instância de Atracacao (data_hora_inicio)
-CtrlOp -> DB: session.commit()
+CtrlOp -> DB: await session.commit()
 CtrlOp --> CLI: Mensagem: Navio atracado com sucesso
 deactivate CtrlOp
 deactivate CLI

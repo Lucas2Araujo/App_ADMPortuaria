@@ -1,88 +1,44 @@
 # Testes Automatizados
 
-O projeto possui duas suítes de testes localizadas em `src/`.
+O projeto possui uma robusta suíte de testes organizados na pasta `src/testes/`. Eles garantem que as regras de negócios, a interface gráfica (GUI) e a interface de terminal (CLI) funcionem corretamente.
 
-## Como executar
+Os arquivos foram agrupados logicamente pelas responsabilidades de cada componente testado.
+
+---
+
+## Estrutura de Testes
+
+### 1. Testes de Backend (`src/testes/backend/`)
+Focam na validação das regras de negócios profundas e do acesso ao banco de dados:
+- **`test_ord_propriety.py`**: Valida unitariamente o motor matemático de pontuação. Garante que os pesos por tipo de carga e os bônus exponenciais e de envelhecimento da fila anti-starvation estão funcionando corretamente.
+- **`test_integracao_operacao.py`**: Testes de integração de fluxos completos. Simula ações reais usando banco de dados SQLite em memória para pré-cadastro de navios, validação de filas e registro de histórico de movimentações portuárias.
+
+### 2. Testes da Interface Gráfica (`src/testes/gui/`)
+Certificam-se de que as telas Flet funcionem sem quebrar ou renderizar problemas:
+- **`test_gui.py`**: Smoke tests (verifica se nenhuma tela possui erros sintáticos de importação) e testes rigorosos e unitários da função pura `validar_formulario_navio` do painel administrativo.
+- **`test_componentes_flet.py`**: Simula cenários reais usando as Views do Flet, verificando se modais abrem, se botões de auditoria acionam as mudanças corretas de status da interface e se os dados são persistidos na tela do operador administrativo.
+
+### 3. Testes da Linha de Comando (`src/testes/cli/`)
+- **`test_app.py`**: Simula a entrada de dados (stdin) no formulário iterativo do terminal do usuário (CLI), garantindo que as validações e o registro do banco de dados continuem funcionais sem a necessidade de uma GUI instanciada.
+
+---
+
+## Como executar (Local e no CI)
+
+As GitHub Actions já rodam `pytest src/` automaticamente a cada commit, englobando todas as subpastas. Mas localmente, você pode executar de forma refinada:
 
 ```bash
-# Rodar todos os testes com relatório detalhado
+# 1. Rodar todos os testes de uma só vez (Backend, GUI e CLI)
 pytest src/ -v
 
-# Rodar apenas os testes da GUI
-pytest src/test_gui.py -v
+# 2. Rodar apenas os testes do motor do Backend (muito rápido, não carrega GUI)
+pytest src/testes/backend/ -v
 
-# Rodar apenas os testes do backend
-pytest src/test_app.py -v
+# 3. Rodar apenas testes relativos à Interface Gráfica (Flet)
+pytest src/testes/gui/ -v
+
+# 4. Rodar apenas simulações do Terminal (CLI)
+pytest src/testes/cli/ -v
 ```
 
----
-
-## Suíte 1 — Smoke tests de importação (`test_gui.py`)
-
-**Classe:** `TestImportacaoModulos`
-
-Verifica que todos os módulos do frontend importam sem levantar exceção. Se alguém introduzir um erro de sintaxe, remover uma dependência ou quebrar um import, esses testes falharão imediatamente no CI.
-
-| Teste | O que verifica |
-|-------|---------------|
-| `test_importa_flet` | Pacote `flet` está instalado |
-| `test_importa_painel_adm` | `painel_adm.py` importa sem erro |
-| `test_importa_fila_view` | `fila_view.py` importa sem erro |
-| `test_importa_painel_tripulacao` | `painel_tripulacao.py` importa sem erro |
-| `test_importa_main_gui` | `main_gui.py` importa sem abrir janela (`ft.run` substituído por no-op) |
-
----
-
-## Suíte 2 — Validação do formulário (`test_gui.py`)
-
-**Classe:** `TestValidacaoFormularioNavio`
-
-Testes unitários da função pura `validar_formulario_navio` de `painel_adm.py`.
-Não requerem display gráfico nem banco de dados.
-
-### Cenários cobertos
-
-#### IMO
-| Teste | Entrada | Resultado esperado |
-|-------|---------|-------------------|
-| `test_imo_vazio_e_obrigatorio` | `""` | erro em `imo` |
-| `test_imo_com_espacos_e_obrigatorio` | `"   "` | erro em `imo` |
-| `test_imo_com_menos_de_7_digitos` | `"12345"` | erro em `imo` |
-| `test_imo_com_mais_de_7_digitos` | `"12345678"` | erro em `imo` |
-| `test_imo_com_letras_invalido` | `"ABC1234"` | erro em `imo` |
-| `test_imo_exatamente_7_digitos_valido` | `"1234567"` | sem erro |
-
-#### Nome do Navio
-| Teste | Entrada | Resultado esperado |
-|-------|---------|-------------------|
-| `test_nome_vazio_e_obrigatorio` | `""` | erro em `nome` |
-| `test_nome_com_caracteres_especiais_invalido` | `"Navio@#$%"` | erro em `nome` |
-| `test_nome_com_acentos_valido` | `"São Pedro"` | sem erro |
-| `test_nome_com_hifen_e_apostrofo_valido` | `"D'Artagnan-II"` | sem erro |
-
-#### Outros campos
-| Teste | Campo | Comportamento |
-|-------|-------|--------------|
-| `test_capitao_vazio_e_obrigatorio` | capitao | erro se vazio |
-| `test_capitao_com_caracteres_especiais_invalido` | capitao | erro com `Cap!@#` |
-| `test_companhia_vazia_e_obrigatoria` | companhia | erro se vazio |
-| `test_peso_zero_invalido` | peso | erro com `"0"` |
-| `test_peso_negativo_invalido` | peso | erro com `"-10"` |
-| `test_peso_decimal_invalido` | peso | erro com `"100.5"` (espera inteiro) |
-| `test_categoria_vazia_obrigatoria` | categoria | erro se vazio |
-| `test_categoria_none_obrigatoria` | categoria | erro se `""` (None do Dropdown) |
-
-#### Cenários combinados
-| Teste | O que verifica |
-|-------|---------------|
-| `test_dados_validos_sem_erros` | Dados completamente válidos → `{}` |
-| `test_todas_categorias_validas` | As 4 categorias permitidas são aceitas |
-| `test_todos_campos_vazios_retorna_todos_os_erros` | 6 campos vazios → 6 erros |
-| `test_apenas_imo_invalido_nao_contamina_outros_campos` | Erro em IMO não afeta outros campos |
-
----
-
-## Pipeline CI/CD
-
-Os testes rodam automaticamente via GitHub Actions a cada `push` ou `pull_request`.
-Veja a configuração em [`.github/workflows/ci.yml`](https://github.com/Lucas2Araujo/App_ADMPortuaria/blob/main/.github/workflows/ci.yml).
+> **Dica**: No VSCode ou PyCharm, todos esses testes são reconhecidos automaticamente pelo menu "Testing", pois todos começam com o prefixo `test_`.

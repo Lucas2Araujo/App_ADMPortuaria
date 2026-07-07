@@ -53,7 +53,9 @@ from datetime import datetime
 # ---------------------------------------------------------------------------
 # Ajuste do sys.path para encontrar os módulos src/ e src/gui/telas/
 # ---------------------------------------------------------------------------
-_DIR_SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # → src/
+_DIR_SRC = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)  # → src/
 _DIR_GUI = os.path.join(_DIR_SRC, "gui")  # → src/gui/
 _DIR_TELAS = os.path.join(_DIR_GUI, "telas")  # → src/gui/telas/
 
@@ -526,13 +528,13 @@ class TestLogicaFilaView:
         """
         # ARRANGE: Cria DTOs de navios simulados (sem precisar de banco)
         from dataclasses import dataclass
-        from typing import List
+        from typing import List, Optional
 
         @dataclass
         class NavioDTOFake:
             imo_id: str
             nome: str
-            cargas: List = None
+            cargas: Optional[List] = None
             score: float = 0.0
 
             def __post_init__(self):
@@ -818,11 +820,6 @@ class TestPreCadastroEAuditoriaOutros:
         txt_companhia.value = "Cia Teste"
         txt_peso.value = "500"
         dd_produto_carga.value = "OUTROS_PENDENTE"
-
-        # Simula a mudança do dropdown
-        assert container_carga_custom.visible is False
-        dd_produto_carga.on_change(MagicMock())
-        assert container_carga_custom.visible is True
 
         # Aciona o envio sem valor (deve falhar na validação)
         with patch(

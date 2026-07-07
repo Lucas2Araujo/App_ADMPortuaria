@@ -15,6 +15,9 @@ class VagasView(ft.Container):
         super().__init__(expand=True)
         self._page = page
 
+        # Lifecycle flag — prevents orphan tasks after logout
+        self._active = False
+
         # State elements
         self.txt_livres_count = ft.Text(
             "0 livres", size=14, color=ft.Colors.ON_SURFACE_VARIANT
@@ -197,8 +200,12 @@ class VagasView(ft.Container):
         self._page.overlay.append(self.dialogo_confirmar_desatracacao)
 
     def did_mount(self):
+        self._active = True
         self._page.run_task(self.atualizar)
         self._page.run_task(self.auto_refresh_loop)
+
+    def will_unmount(self):
+        self._active = False
 
     def abrir_confirmacao_atracacao(self, tipo):
         self.tipo_atracacao = tipo
@@ -287,12 +294,16 @@ class VagasView(ft.Container):
 
                 elif self.tipo_desatracacao == "MASSA":
                     vagas = await obter_painel_vagas_dto(session)
+                    # Coleta todos os IMOs antes do loop para evitar stale data entre iterações
+                    imos_para_desatracar = [
+                        vaga.navio_atracado.imo_id
+                        for vaga in vagas
+                        if vaga.status == "OCUPADA" and vaga.navio_atracado
+                    ]
                     sucesso_count = 0
-                    for vaga in vagas:
-                        if vaga.status == "OCUPADA" and vaga.navio_atracado:
-                            await registrar_desatracacao(
-                                session, vaga.navio_atracado.imo_id
-                            )
+                    for imo in imos_para_desatracar:
+                        resultado = await registrar_desatracacao(session, imo)
+                        if resultado:
                             sucesso_count += 1
 
                     if sucesso_count > 0:
@@ -310,6 +321,170 @@ class VagasView(ft.Container):
             await self.atualizar()
             self._page.update()
 
+    @staticmethod
+    def _hover_action_btn(e, base_bg, hover_bg):
+        e.control.bgcolor = hover_bg if e.data == "true" else base_bg
+        e.control.update()
+
+    def _build_content_livre(self, next_in_queue) -> list:
+        """Returns the content controls for a free berth card."""
+        items = [
+            ft.Text("Disponível", size=14, weight=ft.FontWeight.W_600, color="#16a34a"),
+            ft.Container(expand=True),
+        ]
+        if next_in_queue:
+            items.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.ARROW_DOWNWARD, size=14, color="#ffffff"),
+                            ft.Text(
+                                "Atracar Próximo",
+                                size=12,
+                                weight=ft.FontWeight.W_600,
+                                color="#ffffff",
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=6,
+                    ),
+                    bgcolor="#0d2b4e",
+                    border_radius=8,
+                    padding=ft.padding.only(left=0, top=8, right=0, bottom=8),
+                    ink=True,
+                    on_click=lambda e: self.abrir_confirmacao_atracacao("PROXIMO"),
+                    on_hover=lambda e, bg="#0d2b4e", h="#163d6e": self._hover_action_btn(
+                        e, bg, h
+                    ),
+                )
+            )
+        else:
+            items.append(
+                ft.Text("Fila vazia", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+            )
+        return items
+
+    def _build_content_ocupada(self, vaga) -> list:
+        """Returns the content controls for an occupied berth card."""
+        navio = vaga.navio_atracado
+        navio_nome = navio.nome if navio else "Desconhecido"
+        navio_imo = navio.imo_id if navio else "---"
+        navio_comp = navio.companhia if navio else "---"
+
+        if vaga.data_hora_inicio:
+            minutos = int((datetime.now() - vaga.data_hora_inicio).total_seconds() / 60)
+            tempo_txt = (
+                f"{minutos} min"
+                if minutos < 60
+                else f"{minutos // 60}h {minutos % 60}min"
+            )
+        else:
+            tempo_txt = "N/A"
+
+        return [
+            ft.Column(
+                [
+                    ft.Text(
+                        navio_nome,
+                        size=14,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                        max_lines=1,
+                    ),
+                    ft.Text(
+                        f"IMO {navio_imo}", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
+                    ft.Text(
+                        navio_comp,
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                        max_lines=1,
+                    ),
+                ],
+                spacing=2,
+            ),
+            ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.ACCESS_TIME,
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                    ft.Text(
+                        f"{tempo_txt} atracado",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ],
+                spacing=6,
+            ),
+            ft.Container(expand=True),
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(ft.Icons.ARROW_UPWARD, size=14, color="#dc2626"),
+                        ft.Text(
+                            "Desatracar",
+                            size=12,
+                            weight=ft.FontWeight.W_600,
+                            color="#dc2626",
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    spacing=6,
+                ),
+                bgcolor="#fff5f5",
+                border=ft.border.all(1, "#fca5a5"),
+                border_radius=8,
+                padding=ft.padding.only(left=0, top=8, right=0, bottom=8),
+                ink=True,
+                on_click=lambda e, imo=navio_imo: self.abrir_confirmacao_desatracacao(
+                    "INDIVIDUAL", imo
+                ),
+                on_hover=lambda e, bg="#fff5f5", h="#fee2e2": self._hover_action_btn(
+                    e, bg, h
+                ),
+            ),
+        ]
+
+    def _build_card_berco(self, vaga, next_in_queue) -> ft.Container:
+        """Assembles and returns a complete berth card."""
+        free = vaga.status == "LIVRE"
+        # Cores adaptativas: fundo translúcido sobre a cor Surface do tema
+        color = "#16a34a" if free else "#dc2626"
+        bg_color = ft.Colors.with_opacity(0.08, color)
+        border_color = ft.Colors.with_opacity(0.4, color)
+
+        header = ft.Row(
+            [
+                ft.Text(
+                    f"BERÇO {vaga.id:02d}",
+                    size=12,
+                    weight=ft.FontWeight.BOLD,
+                    color=color,
+                ),
+                ft.Container(width=10, height=10, border_radius=5, bgcolor=color),
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        content = (
+            self._build_content_livre(next_in_queue)
+            if free
+            else self._build_content_ocupada(vaga)
+        )
+
+        return ft.Container(
+            content=ft.Column([header, *content], expand=True),
+            height=220,
+            bgcolor=bg_color,
+            border=ft.border.all(1, border_color),
+            border_radius=12,
+            padding=16,
+        )
+
     async def carregar_dados(self, session):
         from ord_propriety import obter_fila_atracacao_dto
 
@@ -325,184 +500,7 @@ class VagasView(ft.Container):
             f"{ocupadas} ocupada{'s' if ocupadas != 1 else ''}"
         )
 
-        def hover_action_btn(e, base_bg, hover_bg):
-            e.control.bgcolor = hover_bg if e.data == "true" else base_bg
-            e.control.update()
-
-        cards_bercos = []
-        for vaga in vagas:
-            free = vaga.status == "LIVRE"
-            # Cores adaptativas: fundo translúcido sobre a cor Surface do tema
-            bg_color = (
-                ft.Colors.with_opacity(0.08, "#16a34a")
-                if free
-                else ft.Colors.with_opacity(0.08, "#dc2626")
-            )
-            border_color = (
-                ft.Colors.with_opacity(0.4, "#16a34a")
-                if free
-                else ft.Colors.with_opacity(0.4, "#dc2626")
-            )
-            text_status_color = "#16a34a" if free else "#dc2626"
-
-            header_card = ft.Row(
-                [
-                    ft.Text(
-                        f"BERÇO {vaga.id:02d}",
-                        size=12,
-                        weight=ft.FontWeight.BOLD,
-                        color=text_status_color,
-                    ),
-                    ft.Container(
-                        width=10, height=10, border_radius=5, bgcolor=text_status_color
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            )
-
-            content_card = []
-            if free:
-                content_card.append(
-                    ft.Text(
-                        "Disponível",
-                        size=14,
-                        weight=ft.FontWeight.W_600,
-                        color="#16a34a",
-                    )
-                )
-                content_card.append(ft.Container(expand=True))
-                if next_in_queue:
-                    btn_atracar = ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Icon(
-                                    ft.Icons.ARROW_DOWNWARD, size=14, color="#ffffff"
-                                ),
-                                ft.Text(
-                                    "Atracar Próximo",
-                                    size=12,
-                                    weight=ft.FontWeight.W_600,
-                                    color="#ffffff",
-                                ),
-                            ],
-                            alignment=ft.MainAxisAlignment.CENTER,
-                            spacing=6,
-                        ),
-                        bgcolor="#0d2b4e",
-                        border_radius=8,
-                        padding=ft.padding.only(left=0, top=8, right=0, bottom=8),
-                        ink=True,
-                        on_click=lambda e: self.abrir_confirmacao_atracacao("PROXIMO"),
-                        on_hover=lambda e, bg="#0d2b4e", h_bg="#163d6e": hover_action_btn(
-                            e, bg, h_bg
-                        ),
-                    )
-                    content_card.append(btn_atracar)
-                else:
-                    content_card.append(
-                        ft.Text(
-                            "Fila vazia", size=12, color=ft.Colors.ON_SURFACE_VARIANT
-                        )
-                    )
-            else:
-                navio_atracado = vaga.navio_atracado
-                navio_nome = navio_atracado.nome if navio_atracado else "Desconhecido"
-                navio_imo = navio_atracado.imo_id if navio_atracado else "---"
-                navio_comp = navio_atracado.companhia if navio_atracado else "---"
-
-                minutos = int(
-                    (datetime.now() - vaga.data_hora_inicio).total_seconds() / 60
-                )
-                tempo_txt = (
-                    f"{minutos} min"
-                    if minutos < 60
-                    else f"{minutos // 60}h {minutos % 60}min"
-                )
-
-                content_card.append(
-                    ft.Column(
-                        [
-                            ft.Text(
-                                navio_nome,
-                                size=14,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.ON_SURFACE,
-                                overflow=ft.TextOverflow.ELLIPSIS,
-                                max_lines=1,
-                            ),
-                            ft.Text(
-                                f"IMO {navio_imo}",
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                            ft.Text(
-                                navio_comp,
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                overflow=ft.TextOverflow.ELLIPSIS,
-                                max_lines=1,
-                            ),
-                        ],
-                        spacing=2,
-                    )
-                )
-
-                content_card.append(
-                    ft.Row(
-                        [
-                            ft.Icon(
-                                ft.Icons.ACCESS_TIME,
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                            ft.Text(
-                                f"{tempo_txt} atracado",
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        spacing=6,
-                    )
-                )
-                content_card.append(ft.Container(expand=True))
-
-                btn_desatracar = ft.Container(
-                    content=ft.Row(
-                        [
-                            ft.Icon(ft.Icons.ARROW_UPWARD, size=14, color="#dc2626"),
-                            ft.Text(
-                                "Desatracar",
-                                size=12,
-                                weight=ft.FontWeight.W_600,
-                                color="#dc2626",
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        spacing=6,
-                    ),
-                    bgcolor="#fff5f5",
-                    border=ft.border.all(1, "#fca5a5"),
-                    border_radius=8,
-                    padding=ft.padding.only(left=0, top=8, right=0, bottom=8),
-                    ink=True,
-                    on_click=lambda e, imo=navio_imo: self.abrir_confirmacao_desatracacao(
-                        "INDIVIDUAL", imo
-                    ),
-                    on_hover=lambda e, bg="#fff5f5", h_bg="#fee2e2": hover_action_btn(
-                        e, bg, h_bg
-                    ),
-                )
-                content_card.append(btn_desatracar)
-
-            card = ft.Container(
-                content=ft.Column([header_card, *content_card], expand=True),
-                height=220,
-                bgcolor=bg_color,
-                border=ft.border.all(1, border_color),
-                border_radius=12,
-                padding=16,
-            )
-            cards_bercos.append(card)
+        cards_bercos = [self._build_card_berco(v, next_in_queue) for v in vagas]
 
         grid_bercos = ft.ResponsiveRow(
             [
@@ -544,9 +542,11 @@ class VagasView(ft.Container):
             print(f"Erro ao carregar dados dos berços: {err}")
 
     async def auto_refresh_loop(self):
-        while True:
+        while self._active:
             await asyncio.sleep(3)
             try:
+                if not self._active:
+                    break
                 if getattr(self._page, "active_tab", None) == "vagas":
                     await self.atualizar()
             except Exception:
