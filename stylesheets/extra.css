@@ -1,0 +1,43 @@
+/* docs/stylesheets/extra.css */
+
+[data-md-color-scheme="amoled"] {
+  color-scheme: dark;
+
+  /* 1. TEXTOS E TÍTULOS (Correção do texto escuro) */
+  --md-default-fg-color: #ffffff;
+  --md-default-fg-color--light: #e0e0e0;
+  --md-default-fg-color--lighter: #aaaaaa;
+  --md-typeset-color: #ffffff;
+
+  /* 2. FUNDOS PRETO ABSOLUTO */
+  --md-default-bg-color: #000000;
+  --md-default-bg-color--light: #000000;
+  --md-default-bg-color--lighter: #000000;
+  --md-default-bg-color--lightest: #000000;
+
+  --md-primary-bg-color: #000000;
+  --md-primary-bg-color--light: #000000;
+
+  --md-footer-bg-color: #000000;
+  --md-footer-bg-color--dark: #000000;
+
+  /* 3. BLOCOS DE CÓDIGO E CAIXAS EXPANSÍVEIS (Admonitions) */
+  --md-code-fg-color: #e6e6e6;
+  --md-code-bg-color: #111111;
+  
+  /* Correção para os dropdowns de Atributos/Classes */
+  --md-admonition-fg-color: #ffffff;
+  --md-admonition-bg-color: #111111;
+
+  /* Divisórias e bordas mais suaves */
+  --md-default-fg-color--lightest: #333333;
+}
+
+/* Regra de segurança extra para garantir contraste nos blocos que herdam o tema claro */
+[data-md-color-scheme="amoled"] .md-typeset h1,
+[data-md-color-scheme="amoled"] .md-typeset h2,
+[data-md-color-scheme="amoled"] .md-typeset h3,
+[data-md-color-scheme="amoled"] .md-typeset p,
+[data-md-color-scheme="amoled"] .md-typeset details {
+    color: #ffffff;
+}

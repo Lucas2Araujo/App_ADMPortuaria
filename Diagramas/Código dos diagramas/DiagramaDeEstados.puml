@@ -1,0 +1,25 @@
+@startuml
+title Diagrama de Estados: Estados do Navio (Refatorado para a Realidade)
+
+skinparam state {
+    RoundCorner 20
+    BackgroundColor White
+}
+
+[*] --> Pendente : solicitar_pre_cadastro()
+
+state Pendente
+state Validado
+state Rejeitado
+state Atracado
+state Finalizado
+
+Pendente --> Validado : _auditar_documentacao_navio(documento_alfandega=True)
+Pendente --> Rejeitado : _auditar_documentacao_navio(documento_alfandega=False)
+Rejeitado --> Pendente : solicitar_pre_cadastro()
+
+Validado --> Atracado : atracar_navio()
+Atracado --> Finalizado : registrar_desatracacao()
+Finalizado --> [*]
+
+@enduml

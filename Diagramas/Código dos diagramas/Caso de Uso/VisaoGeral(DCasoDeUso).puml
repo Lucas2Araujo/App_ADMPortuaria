@@ -1,0 +1,26 @@
+@startuml
+left to right direction
+skinparam packageStyle folder
+
+title Visão de Alto Nível: Módulos do Sistema
+
+actor "Tripulação do Navio" as Crew
+actor "Administrador do Porto" as Admin
+actor "Sistema da Alfândega" as Alfandega <<Sistema Externo>>
+
+package "Autoatendimento e Cadastros" as Pkg_Cadastros {
+  note "Contém os casos de uso de\npré-cadastro e validação." as N1
+}
+
+package "Operações Portuárias" as Pkg_Operacoes {
+  note "Contém os casos de uso de\nfila, atracação e saída." as N2
+}
+
+' Relacionamentos de Alto Nível
+Crew --> Pkg_Cadastros : "Inicia solicitações"
+Admin --> Pkg_Cadastros : "Audita e valida dados"
+
+Admin --> Pkg_Operacoes : "Gerencia pátio e filas"
+Alfandega --> Pkg_Operacoes : "Informa liberações"
+
+@enduml
