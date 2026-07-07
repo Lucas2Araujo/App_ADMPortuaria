@@ -68,6 +68,7 @@ def validar_formulario_navio(
         
     return erros
 
+
 class PainelAdmView:
     def __init__(self, page: ft.Page, aba_ativa="dashboard"):
         self.page = page
@@ -77,6 +78,7 @@ class PainelAdmView:
         self.txt_fila = ft.Text("0", size=30, weight=ft.FontWeight.BOLD)
         self.txt_pendentes = ft.Text("0", size=30, weight=ft.FontWeight.BOLD)
         self.txt_concluidos = ft.Text("0", size=30, weight=ft.FontWeight.BOLD)
+        self.txt_taxa = ft.Text("0.0", size=30, weight=ft.FontWeight.BOLD)
 
         self.loading_indicator = ft.ProgressRing(visible=False)
 
@@ -140,7 +142,7 @@ class PainelAdmView:
 
         self.dialogo_confirmar_atracacao = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Confirmar Operação de atracaçao"),
+            title=ft.Text("Confirmar Operação de atracação"),
             content=self.txt_msg_atracacao,
             actions=[
                 ft.TextButton(
@@ -332,54 +334,17 @@ class PainelAdmView:
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
-                    ft.ResponsiveRow(
+                    # APLICADO EXPAND=1 DENTRO DO CREATE_STAT_CARD - Sempre lado a lado com espaços respeitados
+                    ft.Row(
                         [
-                            ft.Column(
-                                col={"sm": 12, "md": 6, "lg": 3},
-                                controls=[
-                                    self.create_stat_card(
-                                        "Vagas Livres / Total",
-                                        self.txt_vagas,
-                                        ft.Icons.ANCHOR,
-                                        ft.Colors.BLUE,
-                                    )
-                                ]
-                            ),
-                            ft.Column(
-                                col={"sm": 12, "md": 6, "lg": 3},
-                                controls=[
-                                    self.create_stat_card(
-                                        "Navios na Fila",
-                                        self.txt_fila,
-                                        ft.Icons.FORMAT_LIST_NUMBERED,
-                                        ft.Colors.ORANGE,
-                                    )
-                                ]
-                            ),
-                            ft.Column(
-                                col={"sm": 12, "md": 6, "lg": 3},
-                                controls=[
-                                    self.create_stat_card(
-                                        "Auditorias Pendentes",
-                                        self.txt_pendentes,
-                                        ft.Icons.HOURGLASS_BOTTOM,
-                                        ft.Colors.RED,
-                                    )
-                                ]
-                            ),
-                            ft.Column(
-                                col={"sm": 12, "md": 6, "lg": 3},
-                                controls=[
-                                    self.create_stat_card(
-                                        "Operações Concluídas",
-                                        self.txt_concluidos,
-                                        ft.Icons.CHECK_CIRCLE,
-                                        ft.Colors.GREEN,
-                                    )
-                                ]
-                            ),
+                            self.create_stat_card("Vagas Livres / Total", self.txt_vagas, ft.Icons.ANCHOR, ft.Colors.BLUE),
+                            self.create_stat_card("Navios na Fila", self.txt_fila, ft.Icons.FORMAT_LIST_NUMBERED, ft.Colors.ORANGE),
+                            self.create_stat_card("Auditorias Pendentes", self.txt_pendentes, ft.Icons.HOURGLASS_BOTTOM, ft.Colors.RED),
+                            self.create_stat_card("Operações Concluídas", self.txt_concluidos, ft.Icons.CHECK_CIRCLE, ft.Colors.GREEN),
+                            self.create_stat_card("Taxa de Atracação/Dia", self.txt_taxa, ft.Icons.SPEED, ft.Colors.PURPLE),
                         ],
-                        run_spacing=15,
+                        spacing=15,
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
                     ft.Divider(height=25, color=ft.Colors.TRANSPARENT),
                     ft.Text(
@@ -389,6 +354,7 @@ class PainelAdmView:
                     ),
                     self.container_grafico,
                     ft.Divider(height=25, color=ft.Colors.TRANSPARENT),
+                    # APLICADO FIXED HEIGHT NAS CAIXAS E RETIRADO O STRETCH BUGADO
                     ft.Row(
                         [self.caixa_logs, self.caixa_proximos, self.caixa_vagas],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -847,6 +813,7 @@ class PainelAdmView:
     def criar_caixa(self, titulo, icone, controles_lista):
         return ft.Container(
             expand=1,
+            height=340,          # diminuit a autura do cards inferiores, achei muito grand
             padding=15,
             border_radius=10,
             border=ft.Border.all(1, ft.Colors.BLUE_GREY_500),
@@ -863,6 +830,8 @@ class PainelAdmView:
                     *controles_lista,
                 ],
                 spacing=5,
+                # analizar, chatão isso ai
+                scroll=ft.ScrollMode.AUTO, # permite scroll nas caixas que precisarem 
             ),
         )
 
@@ -995,6 +964,10 @@ class PainelAdmView:
         from controller_operacao import obter_contagem_atracacoes_dia
         hoje_date = datetime.now().date()
         contagem_por_dia = await obter_contagem_atracacoes_dia(session, 7)
+
+        total_semana = sum(contagem_por_dia.values())
+        taxa_diaria = total_semana / 7.0
+        self.txt_taxa.value = f"{taxa_diaria:.1f}"
 
         pico = max(contagem_por_dia.values(), default=1) or 1
         altura_max = 120
@@ -1196,9 +1169,9 @@ class PainelAdmView:
     def create_stat_card(self, title, text_control, icon, icon_color):
         return ft.Card(
             elevation=4,
+            expand=1,        # força o Card a preencher proporcionalmente o espaço horizontal
             content=ft.Container(
                 padding=15,
-                width=220,
                 border_radius=10,
                 content=ft.Column(
                     [

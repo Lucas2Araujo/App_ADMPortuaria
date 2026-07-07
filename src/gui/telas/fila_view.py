@@ -6,7 +6,6 @@ from cad import obter_sessao_async
 from ord_propriety import obter_fila_atracacao_dto
 
 
-
 def obter_view(page: ft.Page):
 
     tabela_fila = ft.DataTable(
@@ -271,14 +270,13 @@ def obter_view(page: ft.Page):
         ),
     )
 
-
     async def auto_refresh_loop():
         while True:
             await asyncio.sleep(2)
-            if getattr(page, "active_tab", None) != "fila":
-                break
             try:
-                await carregar_dados_fila()
+                # O loop continua existindo em background, mas só consome memória se a aba estiver ativa!
+                if getattr(page, "active_tab", None) == "fila":
+                    await carregar_dados_fila()
             except Exception:
                 pass
 
