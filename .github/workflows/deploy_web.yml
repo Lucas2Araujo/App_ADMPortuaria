@@ -1,0 +1,57 @@
+name: Deploy Web App (Flet)
+
+# Faz o deploy do build Flet para o subdiretório /web-app/ do branch gh-pages.
+# NÃO usa a GitHub Pages API (upload-pages-artifact / deploy-pages),
+# então NÃO conflita com o uml_mkdocs.yml que usa o grupo "pages".
+# Em vez disso, faz um push cirúrgico somente na pasta /web-app/.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy_web:
+    name: Publicar Web App no GitHub Pages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Clonar o Repositório
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 Instalar Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r src/requirements.txt
+
+      - name: 🌐 Compilar Web App com Flet
+        run: |
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          flet publish src/app_gui.py \
+            --distpath "$(pwd)/web_build" \
+            --base-url "/$REPO_NAME/web-app/"
+
+      - name: 🚀 Deploy Cirúrgico em /web-app/ no branch gh-pages
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Clona somente o branch gh-pages (sem histórico) em uma pasta separada
+          git clone --depth=1 --branch=gh-pages \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            gh_pages_dir
+
+          # Substitui apenas a subpasta /web-app/
+          rm -rf gh_pages_dir/web-app
+          cp -r web_build gh_pages_dir/web-app
+
+          cd gh_pages_dir
+          git add web-app/
+          git commit -m "chore: atualiza web app [skip ci]" || echo "Nada a commitar"
+          git push origin gh-pages

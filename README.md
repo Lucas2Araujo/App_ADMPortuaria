@@ -3,6 +3,7 @@
 <div align="center">
 
 [![Documentação](https://img.shields.io/badge/Documentação-Ativa-blue?style=for-the-badge&logo=markdown)](https://lucas2araujo.github.io/App_ADMPortuaria/)
+[![Web App](https://img.shields.io/badge/Web%20App-Online-7952b3?style=for-the-badge&logo=flutter&logoColor=white)](https://lucas2araujo.github.io/App_ADMPortuaria/web-app/)
 [![CI - Testes & Cobertura](https://github.com/Lucas2Araujo/App_ADMPortuaria/actions/workflows/ci.yml/badge.svg?style=for-the-badge)](https://github.com/Lucas2Araujo/App_ADMPortuaria/actions/workflows/ci.yml)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge)](https://github.com/psf/black)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)

@@ -1,0 +1,96 @@
+name: Deploy Docs + Web App (GitHub Pages)
+
+# Roda a cada push na main, gerando os diagramas PlantUML,
+# compilando a web app Flet e publicando tudo no GitHub Pages:
+#   /          → documentação MkDocs
+#   /web-app/  → aplicação web Flet
+#
+# ⚠️  Este workflow substitui docs.yml e uml_mkdocs.yml.
+#     Desative ou delete os dois para evitar corrida pelo grupo "pages".
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true   # cancela runs anteriores se um novo push chegar
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    name: Gerar Diagramas, Web App e Publicar Docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: 📥 Clonar o Repositório
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # ── Dependências de sistema ──────────────────────────────────────────
+      - name: 📦 Instalar Java, Graphviz e PlantUML
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-jre graphviz plantuml
+
+      # ── Diagramas ────────────────────────────────────────────────────────
+      - name: 🖼️ Gerar Imagens PNG dos Diagramas (.puml → .png)
+        run: |
+          DEST="$(pwd)/docs/Diagramas/Imagens"
+          mkdir -p "$DEST"
+          find "docs/Diagramas/Código dos diagramas" -name "*.puml" | while read -r puml_file; do
+            echo "Gerando: $puml_file"
+            plantuml -tpng -o "$DEST" "$puml_file"
+          done
+          echo "--- Imagens geradas ---"
+          ls -la "$DEST"
+
+      # ── MkDocs ───────────────────────────────────────────────────────────
+      - name: 📦 Instalar MkDocs e Plugins
+        run: pip install mkdocs-material mkdocstrings[python] mkdocs-glightbox
+
+      - name: 🏗️ Construir Site MkDocs
+        run: mkdocs build --site-dir site_final
+
+      # ── Web App Flet ─────────────────────────────────────────────────────
+      - name: 📦 Instalar Dependências do Projeto
+        run: pip install -r src/requirements.txt
+
+      - name: 🌐 Compilar Web App com Flet
+        run: |
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          flet publish src/app_gui.py \
+            --distpath "$(pwd)/web_build" \
+            --base-url "/$REPO_NAME/web-app/"
+
+      # ── Integração ───────────────────────────────────────────────────────
+      - name: 🔗 Integrar Web App na Pasta /web-app/ do Site
+        run: |
+          mkdir -p site_final/web-app
+          cp -r web_build/. site_final/web-app/
+          echo "--- Conteúdo final do site ---"
+          ls -la site_final/
+          ls -la site_final/web-app/
+
+      # ── Deploy ───────────────────────────────────────────────────────────
+      - name: 📤 Enviar Artefato para o GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site_final
+
+      - name: 🚀 Deploy no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

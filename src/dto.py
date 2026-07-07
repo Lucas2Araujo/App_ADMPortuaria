@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 
+
 @dataclass(frozen=True)
 class CargaDTO:
     id: Optional[int]
@@ -10,6 +11,7 @@ class CargaDTO:
     quantidade_toneladas: int
     eh_perecivel: bool
     documento_alfandega: bool
+
 
 @dataclass(frozen=True)
 class NavioDTO:
@@ -22,6 +24,7 @@ class NavioDTO:
     cargas: List[CargaDTO]
     score: float = 0.0
 
+
 @dataclass(frozen=True)
 class VagaDTO:
     id: int
@@ -29,6 +32,7 @@ class VagaDTO:
     status: str
     navio_atracado: Optional[NavioDTO] = None
     data_hora_inicio: Optional[datetime] = None
+
 
 @dataclass(frozen=True)
 class OperacaoLogDTO:
@@ -38,4 +42,3 @@ class OperacaoLogDTO:
     vaga_id: int
     data_hora: datetime
     navio_nome: str = "Desconhecido"
-

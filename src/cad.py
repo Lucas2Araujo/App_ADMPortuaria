@@ -4,8 +4,23 @@ from dto import NavioDTO
 import enum
 import os
 from datetime import datetime
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, Session
-from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime, Enum, create_engine
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    sessionmaker,
+    Session,
+)
+from sqlalchemy import (
+    String,
+    Integer,
+    Boolean,
+    ForeignKey,
+    DateTime,
+    Enum,
+    create_engine,
+)
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from typing import List, Optional, Tuple
 
@@ -66,6 +81,7 @@ class Navio(Base):
 
     def to_dto(self, score: float = 0.0) -> "NavioDTO":
         from dto import NavioDTO
+
         return NavioDTO(
             imo_id=self.imo_id,
             nome=self.nome,
@@ -74,7 +90,7 @@ class Navio(Base):
             status=self.status.value,
             data_solicitacao=self.data_solicitacao,
             cargas=[c.to_dto() for c in self.cargas],
-            score=score
+            score=score,
         )
 
 
@@ -93,13 +109,14 @@ class Carga(Base):
 
     def to_dto(self) -> "CargaDTO":
         from dto import CargaDTO
+
         return CargaDTO(
             id=self.id,
             descricao=self.descricao,
             categoria=self.categoria,
             quantidade_toneladas=self.quantidade_toneladas,
             eh_perecivel=self.eh_perecivel,
-            documento_alfandega=self.documento_alfandega
+            documento_alfandega=self.documento_alfandega,
         )
 
 
@@ -112,14 +129,19 @@ class Vaga(Base):
         Enum(StatusVaga), default=StatusVaga.LIVRE, index=True
     )
 
-    def to_dto(self, navio_atracado: Optional["NavioDTO"] = None, data_hora_inicio: Optional[datetime] = None) -> "VagaDTO":
+    def to_dto(
+        self,
+        navio_atracado: Optional["NavioDTO"] = None,
+        data_hora_inicio: Optional[datetime] = None,
+    ) -> "VagaDTO":
         from dto import VagaDTO
+
         return VagaDTO(
             id=self.id,
             tipo_vaga=self.tipo_vaga,
             status=self.status.value,
             navio_atracado=navio_atracado,
-            data_hora_inicio=data_hora_inicio
+            data_hora_inicio=data_hora_inicio,
         )
 
 
@@ -141,15 +163,17 @@ _session_maker = None
 _async_engine = None
 _async_session_maker = None
 
+
 def inicializar_banco(db_path: str):
     """Inicializa a engine global e cria as tabelas."""
     global _engine, _session_maker, _async_engine, _async_session_maker
     if _engine is None:
         from sqlalchemy.pool import NullPool
+
         _engine = create_engine(
             f"sqlite:///{db_path}",
             connect_args={"check_same_thread": False},
-            poolclass=NullPool
+            poolclass=NullPool,
         )
         Base.metadata.create_all(_engine)
         _session_maker = sessionmaker(bind=_engine)
@@ -157,14 +181,13 @@ def inicializar_banco(db_path: str):
         _async_engine = create_async_engine(
             f"sqlite+aiosqlite:///{db_path}",
             connect_args={"check_same_thread": False},
-            poolclass=NullPool
+            poolclass=NullPool,
         )
         _async_session_maker = async_sessionmaker(
-            bind=_async_engine,
-            class_=AsyncSession,
-            expire_on_commit=False
+            bind=_async_engine, class_=AsyncSession, expire_on_commit=False
         )
     return _engine
+
 
 def obter_sessao() -> Session:
     """Retorna uma nova sessão de banco de dados ativa."""
@@ -175,6 +198,7 @@ def obter_sessao() -> Session:
         inicializar_banco(db_path)
     return _session_maker()
 
+
 def obter_sessao_async() -> AsyncSession:
     """Retorna uma nova sessão assíncrona de banco de dados."""
     global _async_session_maker
@@ -183,4 +207,3 @@ def obter_sessao_async() -> AsyncSession:
         db_path = os.path.join(diretorio_src, "porto.db")
         inicializar_banco(db_path)
     return _async_session_maker()
-

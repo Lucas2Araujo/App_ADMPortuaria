@@ -1,51 +1,149 @@
 import os
 import sys
 import flet as ft
+import gui.compat
 import asyncio
 from cad import obter_sessao_async
 from ord_propriety import obter_fila_atracacao_dto
 
 
+class FilaView(ft.Container):
+    """Manager class for the mooring queue view.
 
-def obter_view(page: ft.Page):
+    This class handles the creation and updating of the Flet layout and controls,
+    reducing Cognitive Complexity by modularizing event handling and UI building.
+    """
 
-    tabela_fila = ft.DataTable(
-        columns=[
-            ft.DataColumn(ft.Text("Posição", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Nome do Navio", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Observação / Carga", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Ações", weight=ft.FontWeight.BOLD)),
-        ],
-        rows=[],
-    )
+    def __init__(self, page: ft.Page):
+        super().__init__(expand=True)
+        self._page = page
 
+        # Table showing the queue of ships
+        self.tabela_fila = ft.DataTable(
+            heading_row_color=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
+            border_radius=12,
+            horizontal_margin=20,
+            column_spacing=20,
+            heading_text_style=ft.TextStyle(
+                color=ft.Colors.ON_SURFACE_VARIANT, size=12, weight=ft.FontWeight.BOLD
+            ),
+            columns=[
+                ft.DataColumn(ft.Text("POSIÇÃO")),
+                ft.DataColumn(ft.Text("EMBARCAÇÃO")),
+                ft.DataColumn(ft.Text("OBSERVAÇÃO / CARGA")),
+                ft.DataColumn(ft.Text("AÇÕES")),
+            ],
+            rows=[],
+        )
+        self.tabela_scroll = ft.ListView(
+            controls=[self.tabela_fila],
+            expand=True,
+        )
 
-    txt_vazio = ft.Text(
-        "Nenhum navio aguardando na fila de atracação no momento.",
-        size=16,
-        italic=True,
-        color=ft.Colors.GREY_500,
-        visible=False,
-    )
+        # Empty state container
+        self.txt_vazio = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, size=36, color="#86efac"),
+                    ft.Text(
+                        "Fila vazia — todos os navios foram atracados.",
+                        size=14,
+                        weight=ft.FontWeight.W_500,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding(left=0, top=56, right=0, bottom=56),
+            alignment=ft.Alignment(0, 0),
+            visible=False,
+        )
 
-    def fechar_dialogo(e):
-        dialogo_detalhes.open = False
-        page.update()
+        # Detail dialog configuration
+        self.dialogo_detalhes = ft.AlertDialog(
+            actions=[
+                ft.TextButton("Fechar Janela", on_click=self.fechar_dialogo),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+            on_dismiss=self.fechar_dialogo,
+        )
+        self._page.overlay.append(self.dialogo_detalhes)
 
-    dialogo_detalhes = ft.AlertDialog(
-        actions=[
-            ft.TextButton("Fechar Janela", on_click=fechar_dialogo),
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
-        on_dismiss=fechar_dialogo,
-    )
-    page.overlay.append(dialogo_detalhes)
+        # Counter text
+        self.txt_contador = ft.Text(
+            "0 navios aguardando", size=14, color=ft.Colors.ON_SURFACE_VARIANT
+        )
 
-    def abrir_detalhes_navio(navio, posicao):
+        # Mooring/refresh button
+        self.btn_atracar = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.REFRESH, size=16, color="#ffffff"),
+                    ft.Text(
+                        "Atualizar Fila",
+                        size=14,
+                        weight=ft.FontWeight.W_600,
+                        color="#ffffff",
+                    ),
+                ],
+                spacing=8,
+            ),
+            bgcolor="#0d2b4e",
+            padding=ft.Padding(left=20, top=10, right=20, bottom=10),
+            border_radius=12,
+            ink=True,
+            on_click=lambda e: self._page.run_task(self.carregar_dados_fila),
+            on_hover=self.hover_btn_atracar,
+        )
+
+        # Main layout container
+        self.content = ft.Container(
+            padding=32,
+            expand=True,
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            self.txt_contador,
+                            self.btn_atracar,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=8),
+                    ft.Container(
+                        bgcolor=ft.Colors.SURFACE,
+                        border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
+                        border_radius=12,
+                        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+                        content=ft.Stack(
+                            [
+                                self.tabela_scroll,
+                                self.txt_vazio,
+                            ],
+                            expand=True,
+                        ),
+                        expand=True,
+                    ),
+                ],
+                expand=True,
+            ),
+        )
+
+    def did_mount(self):
+        self._page.run_task(self.carregar_dados_fila)
+        self._page.run_task(self.auto_refresh_loop)
+
+    def fechar_dialogo(self, e):
+        """Closes the ship details dialog."""
+        self.dialogo_detalhes.open = False
+        self._page.update()
+
+    def abrir_detalhes_navio(self, navio, posicao):
+        """Builds and opens the details dialog for a given ship."""
         print(
             f"[DEBUG] Gerando ficha técnica do navio {navio.nome} (Posição: {posicao})..."
         )
-
 
         capitao = getattr(
             navio, "nome_capitao", getattr(navio, "capitao", "Não informado")
@@ -55,10 +153,7 @@ def obter_view(page: ft.Page):
         )
         peso = f"{peso_total} Toneladas"
         categoria = (
-            ", ".join(set(c.categoria for c in navio.cargas)) if navio.cargas else "N/A"
-        )
-        carga_desc = (
-            " | ".join(c.descricao for c in navio.cargas) if navio.cargas else "N/A"
+            ", ".join({c.categoria for c in navio.cargas}) if navio.cargas else "N/A"
         )
         documentos = (
             "Completos"
@@ -72,216 +167,192 @@ def obter_view(page: ft.Page):
         )
         score = f"{navio.score:.2f}"
 
-
-        def criar_linha(icone, rotulo, valor, destaque=False):
-            return ft.Row(
-                [
-
-                    ft.Row(
-                        [
-                            ft.Icon(icone, size=18, color=ft.Colors.BLUE_GREY_500),
-                            ft.Text(rotulo, color=ft.Colors.BLUE_GREY_700),
-                        ],
-                        spacing=8,
-                    ),
-
-                    ft.Container(
-                        content=ft.Text(
-                            str(valor),
-                            weight=(
-                                ft.FontWeight.BOLD if destaque else ft.FontWeight.NORMAL
-                            ),
-                            color=ft.Colors.BLUE_900 if destaque else ft.Colors.BLACK87,
-                            text_align=ft.TextAlign.RIGHT,
-                        ),
-                        expand=True,
-                        padding=ft.Padding(left=10, right=0, top=0, bottom=0),
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,  # Alinha nas extremidades
-                vertical_alignment=ft.CrossAxisAlignment.START,
-            )
-
-        dialogo_detalhes.title = ft.Row(
+        self.dialogo_detalhes.title = ft.Text(
+            f"Ficha Técnica — Posição #{posicao}", weight=ft.FontWeight.BOLD
+        )
+        self.dialogo_detalhes.content = ft.Column(
             [
-                ft.Icon(ft.Icons.DIRECTIONS_BOAT, color=ft.Colors.BLUE_700),
-                ft.Text(f"Ficha Técnica — Fila #{posicao}", weight=ft.FontWeight.BOLD),
+                ft.Text(
+                    f"Nome da Embarcação: {navio.nome}",
+                    size=14,
+                    weight=ft.FontWeight.W_600,
+                ),
+                ft.Text(f"Código IMO ID: {navio.imo_id}", size=14),
+                ft.Text(f"Capitão Responsável: {capitao}", size=14),
+                ft.Text(f"Companhia / Armador: {navio.companhia}", size=14),
+                ft.Text(f"Peso Declarado: {peso}", size=14),
+                ft.Text(f"Categoria Logística: {categoria}", size=14),
+                ft.Text(f"Carga Perecível: {perecivel}", size=14),
+                ft.Text(f"Documentação Alfandegária: {documentos}", size=14),
+                ft.Text(
+                    f"Score de Fila: {score}",
+                    size=14,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.BLUE_800,
+                ),
             ],
+            tight=True,
             spacing=10,
         )
-        dialogo_detalhes.content = ft.Container(
-            width=500,
-            content=ft.Column(
-                [
-                    ft.Divider(height=10),
-                    criar_linha(ft.Icons.DIRECTIONS_BOAT_OUTLINED, "Nome da Embarcação:", navio.nome, destaque=True),
-                    criar_linha(ft.Icons.NUMBERS, "Código IMO ID:", navio.imo_id),
-                    criar_linha(ft.Icons.PERSON_OUTLINE, "Capitão Responsável:", capitao),
-                    criar_linha(ft.Icons.BUSINESS, "Companhia / Armador:", navio.companhia),
-                    criar_linha(ft.Icons.SCALE, "Peso Declarado:", peso),
-                    criar_linha(ft.Icons.CATEGORY_OUTLINED, "Categoria Logística:", categoria),
-                    criar_linha(ft.Icons.DESCRIPTION_OUTLINED, "Manifesto de Carga:", carga_desc),
-                    criar_linha(ft.Icons.AC_UNIT, "Carga Perecível:", perecivel),
-                    criar_linha(ft.Icons.ASSIGNMENT_TURNED_IN_OUTLINED, "Doc. Alfandegária:", documentos),
-                    ft.Divider(height=10),
-                    criar_linha(ft.Icons.STARS, "Score Atual de Fila:", score, destaque=True),
-                ],
-                tight=True,
-                spacing=12,
-            ),
-        )
+        self.dialogo_detalhes.open = True
+        self._page.update()
 
-        dialogo_detalhes.open = True
-        page.update()
+    def hover_ver_mais(self, e):
+        """Hover effect handler for the 'Ver mais' button."""
+        e.control.bgcolor = "#e8eef6" if e.data == "true" else None
+        e.control.update()
 
-    async def carregar_dados_fila(e=None):
-        """Busca os navios validados no banco e monta as linhas da tabela ordenadas."""
+    def hover_btn_atracar(self, e):
+        """Hover effect handler for the main mooring/refresh button."""
+        e.control.bgcolor = "#163d6e" if e.data == "true" else "#0d2b4e"
+        e.control.update()
+
+    async def carregar_dados_fila(self, e=None):
+        """Loads mooring queue data asynchronously from the database."""
         try:
             async with obter_sessao_async() as session:
                 navios = await obter_fila_atracacao_dto(session)
 
-                novas_linhas = []
+                self.txt_contador.value = (
+                    f"{len(navios)} navio{'s' if len(navios) != 1 else ''} aguardando"
+                )
 
                 if not navios:
-                    txt_vazio.visible = True
-                    tabela_fila.visible = False
+                    self.txt_vazio.visible = True
+                    self.tabela_scroll.visible = False
+                    self.tabela_fila.rows = []
                 else:
-                    txt_vazio.visible = False
-                    tabela_fila.visible = True
+                    self.txt_vazio.visible = False
+                    self.tabela_scroll.visible = True
 
-
+                    novas_linhas = []
                     for idx, navio in enumerate(navios):
                         posicao = idx + 1
+                        linha = self._criar_linha_navio(navio, posicao)
+                        novas_linhas.append(linha)
+                    self.tabela_fila.rows = novas_linhas
 
-
-                        obs_texto = (
-                            " | ".join(c.descricao for c in navio.cargas)
-                            if navio.cargas
-                            else "Carga Geral"
-                        )
-                        if navio.cargas and any(c.eh_perecivel for c in navio.cargas):
-                            obs_texto += " ⚠️ [PERECÍVEL]"
-
-
-                        btn_ver_mais = ft.ElevatedButton(
-                            "Ver mais",
-                            icon=ft.Icons.INFO_OUTLINED,
-                            on_click=lambda e, n=navio, p=posicao: abrir_detalhes_navio(
-                                n, p
-                            ),
-                            style=ft.ButtonStyle(
-                                color=ft.Colors.BLUE_700,
-                                bgcolor=ft.Colors.BLUE_50,
-                            ),
-                        )
-
-
-                        novas_linhas.append(
-                            ft.DataRow(
-                                cells=[
-                                    ft.DataCell(
-                                        ft.Text(
-                                            f"{posicao}º", weight=ft.FontWeight.BOLD
-                                         )
-                                    ),
-                                    ft.DataCell(
-                                        ft.Container(
-                                            content=ft.Text(
-                                                navio.nome,
-                                                overflow=ft.TextOverflow.ELLIPSIS,
-                                                max_lines=1,
-                                            ),
-                                            width=180,
-                                            tooltip=navio.nome,
-                                        )
-                                    ),
-                                    ft.DataCell(
-                                        ft.Container(
-                                            content=ft.Text(
-                                                obs_texto,
-                                                overflow=ft.TextOverflow.ELLIPSIS,
-                                                max_lines=1,
-                                                color=ft.Colors.BLUE_GREY_700,
-                                            ),
-                                            width=350,
-                                            tooltip=obs_texto,
-                                        )
-                                    ),
-                                    ft.DataCell(btn_ver_mais),
-                                ]
-                            )
-                        )
-                tabela_fila.rows = novas_linhas
-                page.update()
+                self._page.update()
         except Exception as erro:
             print(f"Erro ao carregar fila de atracação: {erro}")
 
+    def _obter_texto_cargas(self, cargas):
+        """Formats the cargo descriptions for row observation text."""
+        if not cargas:
+            return "Carga Geral"
+        descricoes = [c.descricao for c in cargas]
+        if len(descricoes) > 3:
+            return " | ".join(descricoes[:3]) + " | ..."
+        return " | ".join(descricoes)
 
-    page.run_task(carregar_dados_fila)
+    def _criar_linha_navio(self, navio, posicao):
+        """Helper method to construct a ft.DataRow for a specific ship in the queue."""
+        obs_texto = self._obter_texto_cargas(navio.cargas)
+        eh_perecivel = navio.cargas and any(c.eh_perecivel for c in navio.cargas)
 
-    container_fila = ft.Container(
-        padding=20,
-        expand=True,
-        content=ft.Column(
+        btn_ver_mais = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color="#2e7ec1"),
+                    ft.Text(
+                        "Ver mais", size=12, weight=ft.FontWeight.W_600, color="#2e7ec1"
+                    ),
+                ],
+                spacing=6,
+            ),
+            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border_radius=8,
+            padding=ft.Padding(left=14, top=8, right=14, bottom=8),
+            ink=True,
+            on_click=lambda e, n=navio, p=posicao: self.abrir_detalhes_navio(n, p),
+            on_hover=self.hover_ver_mais,
+        )
+
+        posicao_widget = ft.Container(
+            content=ft.Container(
+                content=ft.Text(
+                    str(posicao), size=12, weight=ft.FontWeight.BOLD, color="#ffffff"
+                ),
+                bgcolor="#0d2b4e",
+                border_radius=16,
+                width=32,
+                height=32,
+                alignment=ft.Alignment(0, 0),
+            ),
+            width=80,
+            alignment=ft.Alignment(-1, 0),
+        )
+
+        acoes_widget = ft.Container(
+            content=btn_ver_mais,
+            width=120,
+            alignment=ft.Alignment(-1, 0),
+        )
+
+        vessel_widget = ft.Column(
             [
-                ft.Row(
-                    [
-                        ft.Row(
-                            [
-                                ft.Icon(
-                                    ft.Icons.FORMAT_LIST_NUMBERED,
-                                    size=36,
-                                ),
-                                ft.Text(
-                                    "Fila de Atracação - Tempo Real",
-                                    size=28,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-                            ],
-                            spacing=12,
-                        ),
-                        ft.IconButton(
-                            ft.Icons.REFRESH,
-                            tooltip="Atualizar Fila",
-                            on_click=lambda e: page.run_task(carregar_dados_fila),
-                            icon_color=ft.Colors.CYAN_700,
-                            icon_size=28,
-                        ),
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ft.Text(
+                    navio.nome,
+                    size=14,
+                    weight=ft.FontWeight.W_600,
+                    color=ft.Colors.ON_SURFACE,
                 ),
                 ft.Text(
-                    "Abaixo estão listadas as embarcações autorizadas a atracar, ordenadas pelo motor de prioridade do porto.",
-                    size=14,
-                    color=ft.Colors.BLUE_GREY_500,
+                    f"IMO {navio.imo_id}",
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    font_family="monospace",
                 ),
-                ft.Divider(height=25, color=ft.Colors.CYAN_700),
-                txt_vazio,
-                ft.Card(
-                    elevation=4,
-                    shape=ft.RoundedRectangleBorder(radius=12),
-                    content=ft.Container(
-                        padding=15,
-                        content=ft.ListView(controls=[tabela_fila], expand=True, spacing=10),
-                    ),
-                    expand=True,
-                )
             ],
-            expand=True,
-        ),
-    )
+            spacing=2,
+        )
 
+        cargo_text = ft.Text(
+            obs_texto, size=13, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.W_500
+        )
+        col_controls = [cargo_text]
 
-    async def auto_refresh_loop():
+        if eh_perecivel:
+            selo_perecivel = ft.Container(
+                content=ft.Text(
+                    "Perecível", size=11, weight=ft.FontWeight.BOLD, color="#d97706"
+                ),
+                bgcolor="#fffbeb",
+                border=ft.Border.all(0.5, "#fef3c7"),
+                padding=ft.Padding(left=6, top=2, right=6, bottom=2),
+                border_radius=4,
+            )
+            col_controls.append(selo_perecivel)
+
+        cargo_widget = ft.Container(
+            content=ft.Column(
+                col_controls,
+                alignment=ft.MainAxisAlignment.CENTER,
+                spacing=4,
+            ),
+            alignment=ft.Alignment(-1, 0),
+        )
+
+        return ft.DataRow(
+            cells=[
+                ft.DataCell(posicao_widget),
+                ft.DataCell(vessel_widget),
+                ft.DataCell(cargo_widget),
+                ft.DataCell(acoes_widget),
+            ]
+        )
+
+    async def auto_refresh_loop(self):
+        """Asynchronous loop that refreshes the queue data periodically."""
         while True:
             await asyncio.sleep(2)
-            if getattr(page, "active_tab", None) != "fila":
-                break
             try:
-                await carregar_dados_fila()
+                if getattr(self._page, "active_tab", None) == "fila":
+                    await self.carregar_dados_fila()
             except Exception:
                 pass
 
-    page.run_task(auto_refresh_loop)
 
-    return container_fila
+def obter_view(page: ft.Page):
+    """Factory function that returns the mooring queue container."""
+    return FilaView(page)

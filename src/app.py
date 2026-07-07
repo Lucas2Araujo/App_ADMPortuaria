@@ -4,7 +4,17 @@ import asyncio
 from pathlib import Path
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from cad import Base, Atracacao, Navio, Vaga, StatusVaga, StatusNavio, obter_sessao, obter_sessao_async, inicializar_banco
+from cad import (
+    Base,
+    Atracacao,
+    Navio,
+    Vaga,
+    StatusVaga,
+    StatusNavio,
+    obter_sessao,
+    obter_sessao_async,
+    inicializar_banco,
+)
 from controller_cadastros import (
     solicitar_pre_cadastro,
     auditar_solicitacoes_pendentes,
@@ -21,7 +31,6 @@ from controller_operacao import (
 )
 from ord_propriety import obter_fila_atracacao_dto
 from pop_bd import gerar_navios_fake, gerar_vagas_iniciais
-
 
 REGEX_NOME_VALIDO = r"[A-Za-z0-9À-ÿ\s\-']+"
 MSG_OPCAO_INVALIDA = "Opção inválida."
@@ -132,7 +141,9 @@ async def _obter_peso():
 async def _obter_documentos():
     while True:
         possui_doc_str = (
-            (await async_input("Possui documentos da alfândega? (S/N): ")).strip().upper()
+            (await async_input("Possui documentos da alfândega? (S/N): "))
+            .strip()
+            .upper()
         )
         if possui_doc_str in ("S", "SIM", "Y", "YES"):
             return True
@@ -170,7 +181,9 @@ async def coletar_dados_cadastro(session):
         eh_perecivel=eh_perecivel,
         possui_documentos=possui_documentos,
     )
-    print(f"[CAPITÃO] Pré-cadastro realizado: Navio '{nome}' ({imo}) adicionado com status PENDENTE.")
+    print(
+        f"[CAPITÃO] Pré-cadastro realizado: Navio '{nome}' ({imo}) adicionado com status PENDENTE."
+    )
 
 
 async def editar_navio(session):
@@ -189,7 +202,9 @@ async def editar_navio(session):
     nova_companhia = await _obter_nome_edicao("Nova Companhia", navio.companhia)
 
     try:
-        await editar_registro_navio(session, navio.imo_id, novo_nome, novo_capitao, nova_companhia)
+        await editar_registro_navio(
+            session, navio.imo_id, novo_nome, novo_capitao, nova_companhia
+        )
         print(f"\n Dados do navio {navio.imo_id} atualizados com sucesso no sistema!")
     except Exception as e:
         print(f"Erro ao editar navio: {e}")
@@ -200,7 +215,7 @@ async def _atracar_lote(session):
     while True:
         vagas = await obter_painel_vagas_dto(session)
         vaga_livre = next((v for v in vagas if v.status == "LIVRE"), None)
-        
+
         fila = await obter_fila_atracacao_dto(session)
         navio_fila = fila[0] if fila else None
 
@@ -230,7 +245,9 @@ async def iniciar_atracacao(session):
     if escolha_atr == "1":
         log = await atracar_navio(session)
         if log:
-            print(f"Navio {log.navio_imo_id} atracado na Vaga {log.vaga_id} com sucesso.")
+            print(
+                f"Navio {log.navio_imo_id} atracado na Vaga {log.vaga_id} com sucesso."
+            )
         else:
             print("Nenhum navio disponível na fila ou nenhuma vaga livre.")
     elif escolha_atr == "2":
@@ -266,18 +283,27 @@ async def _desatracar_por_indice(session, escolha, vagas_ocupadas):
     navio = vagas_ocupadas[idx].navio_atracado
     if navio:
         await registrar_desatracacao(session, navio.imo_id)
-        print(f"Desatracação do navio {navio.imo_id} registrada. Vaga {vagas_ocupadas[idx].id} agora está LIVRE.")
+        print(
+            f"Desatracação do navio {navio.imo_id} registrada. Vaga {vagas_ocupadas[idx].id} agora está LIVRE."
+        )
 
 
 async def _desatracar_por_imo(session, escolha, vagas_ocupadas):
     imo_busca = escolha if escolha.startswith("IMO") else f"IMO{escolha}"
     vaga_encontrada = next(
-        (v for v in vagas_ocupadas if v.navio_atracado and v.navio_atracado.imo_id == imo_busca), None
+        (
+            v
+            for v in vagas_ocupadas
+            if v.navio_atracado and v.navio_atracado.imo_id == imo_busca
+        ),
+        None,
     )
 
     if vaga_encontrada:
         await registrar_desatracacao(session, imo_busca)
-        print(f"Desatracação do navio {imo_busca} registrada. Vaga {vaga_encontrada.id} agora está LIVRE.")
+        print(
+            f"Desatracação do navio {imo_busca} registrada. Vaga {vaga_encontrada.id} agora está LIVRE."
+        )
     else:
         print(" Erro: Navio não encontrado na lista de atracados ou opção inválida.")
 
@@ -291,7 +317,11 @@ async def desatracar_navio(session):
 
     _exibir_menu_desatracacao(vagas_ocupadas)
 
-    escolha = (await async_input("\nEscolha o número, digite o IMO, ou [T] para todos: ")).strip().upper()
+    escolha = (
+        (await async_input("\nEscolha o número, digite o IMO, ou [T] para todos: "))
+        .strip()
+        .upper()
+    )
 
     if escolha == "0":
         print(MSG_OPERACAO_CANCELADA)
@@ -315,7 +345,9 @@ async def menu_excluir_navio(session):
 
     try:
         await excluir_registro_navio(session, navio.imo_id)
-        print(f"[ADMIN] Sucesso: Registro do navio '{navio.nome}' ({navio.imo_id}) foi excluído definitivamente.")
+        print(
+            f"[ADMIN] Sucesso: Registro do navio '{navio.nome}' ({navio.imo_id}) foi excluído definitivamente."
+        )
     except Exception as e:
         print(f"[ADMIN] Erro: {e}")
 
@@ -340,7 +372,9 @@ async def _resetar_banco(engine):
     if confirm in ("S", "SIM", "Y", "YES"):
         try:
             qtd_navios = int(await async_input("Quantidade de navios para gerar: "))
-            qtd_vagas = int(await async_input("Quantidade de berços (terminais) para criar: "))
+            qtd_vagas = int(
+                await async_input("Quantidade de berços (terminais) para criar: ")
+            )
 
             if qtd_navios <= 0 or qtd_vagas <= 0:
                 print("Erro: As quantidades devem ser maiores que zero.")
@@ -402,7 +436,7 @@ async def _selecionar_ou_pesquisar_navio(session):
     """
     result = await session.execute(select(Navio))
     todos_navios = result.scalars().all()
-    
+
     if not todos_navios:
         print("Não há navios registrados no sistema.")
         return None
@@ -422,10 +456,8 @@ async def _selecionar_ou_pesquisar_navio(session):
     if entrada == "0":
         return "CANCELADO"
 
-
     if entrada.isdigit() and 1 <= int(entrada) <= len(todos_navios):
         return todos_navios[int(entrada) - 1]
-
 
     imo_busca = entrada if entrada.startswith("IMO") else f"IMO{entrada}"
     result = await session.execute(select(Navio).filter(Navio.imo_id == imo_busca))
@@ -444,14 +476,22 @@ def _relatar_auditoria(auditos):
         return
     for navio in auditos:
         if navio.status == "VALIDADO":
-            print(f"[ADMIN] SUCESSO: Navio '{navio.nome}' ({navio.imo_id}) VALIDADO. Aprovado para entrar na Fila de Atracação.")
+            print(
+                f"[ADMIN] SUCESSO: Navio '{navio.nome}' ({navio.imo_id}) VALIDADO. Aprovado para entrar na Fila de Atracação."
+            )
         else:
-            print(f"[ADMIN] AVISO: Navio '{navio.nome}' ({navio.imo_id}) REJEITADO. Documentação da carga incompleta.")
+            print(
+                f"[ADMIN] AVISO: Navio '{navio.nome}' ({navio.imo_id}) REJEITADO. Documentação da carga incompleta."
+            )
 
 
 async def _resolver_carga_nao_classificada(session, err):
-    print(f"\nAtenção: O navio {err.navio_nome} possui uma carga não classificada: [{err.carga_descricao}].")
-    print("[1] Ultra Perecível | [2] Alta Perecibilidade | [3] Baixa Perecibilidade | [4] Comum")
+    print(
+        f"\nAtenção: O navio {err.navio_nome} possui uma carga não classificada: [{err.carga_descricao}]."
+    )
+    print(
+        "[1] Ultra Perecível | [2] Alta Perecibilidade | [3] Baixa Perecibilidade | [4] Comum"
+    )
     opcoes = {
         "1": ("URGENTE_PERECIVEL", True),
         "2": ("ALTA_PERECIBILIDADE", True),
@@ -480,7 +520,9 @@ async def auditar_solicitacoes(session):
 async def mostrar_fila_atracacao(session):
     fila = await obter_fila_atracacao_dto(session)
     if not fila:
-        print("Aviso: A fila de atracação está vazia no momento (Nenhum navio VALIDADO).")
+        print(
+            "Aviso: A fila de atracação está vazia no momento (Nenhum navio VALIDADO)."
+        )
         return
 
     print(
@@ -491,6 +533,7 @@ async def mostrar_fila_atracacao(session):
     for pos, navio in enumerate(fila, start=1):
         if navio.data_solicitacao:
             from datetime import datetime
+
             espera = datetime.now() - navio.data_solicitacao
             espera_str = str(espera).split(".")[0]
         else:

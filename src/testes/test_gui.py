@@ -30,7 +30,8 @@ for _path in (_DIR_TEST, _DIR_GUI, _DIR_TELAS):
 # Import da função pura de validação — feito APÓS o ajuste do sys.path para
 # que o pyrefly e outros analisadores estáticos consigam resolver o módulo.
 # ---------------------------------------------------------------------------
-from painel_adm import validar_formulario_navio  # noqa: E402
+from adm.gerenciar import validar_formulario_navio  # noqa: E402
+import gui.compat
 
 # ===========================================================================
 # 1. Smoke tests de importação
@@ -49,8 +50,11 @@ class TestImportacaoModulos(unittest.TestCase):
         import flet  # noqa: F401
 
     def test_importa_painel_adm(self):
-        """painel_adm.py deve importar sem erros."""
-        import painel_adm  # noqa: F401
+        """Os novos módulos do painel_adm modularizado devem importar sem erros."""
+        from adm import dashboard  # noqa: F401
+        from adm import vagas  # noqa: F401
+        from adm import gerenciar  # noqa: F401
+        from adm import auditoria  # noqa: F401
 
     def test_importa_fila_view(self):
         """fila_view.py deve importar sem erros."""

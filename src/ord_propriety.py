@@ -38,10 +38,8 @@ def calcular_score(navio: Navio) -> float:
         if carga.eh_perecivel and peso > maior_grau_perecivel:
             maior_grau_perecivel = peso
 
-
     if maior_grau_perecivel > 0:
         score_total += 10000 * maior_grau_perecivel
-
 
     if navio.data_solicitacao:
         tempo_espera = datetime.now() - navio.data_solicitacao
@@ -73,7 +71,6 @@ def criar_subquery_score_cargas():
     maior_grau = func.max(grau_perecivel)
     bonus_perecivel = case((maior_grau > 0, maior_grau * 10000), else_=0)
 
-
     return (
         select(
             Carga.navio_imo_id.label("navio_imo_id"),
@@ -103,7 +100,6 @@ def obter_expressao_score_total(sq_cargas, agora):
     )
     horas_espera = segundos_espera / 3600.0
     bonus_tempo = horas_espera * 1000
-
 
     return func.coalesce(sq_cargas.c.score_cargas, 0) + func.coalesce(bonus_tempo, 0)
 
@@ -146,9 +142,8 @@ async def obter_fila_atracacao_dto(session) -> list:
         .filter(Navio.status == StatusNavio.VALIDADO)
         .order_by(score_total.desc())
     )
-    
+
     result = await session.execute(stmt)
     resultados = result.unique().all()
 
     return [navio.to_dto(score=float(score)) for navio, score in resultados]
-

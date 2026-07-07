@@ -11,7 +11,9 @@ class TestCLIApp(unittest.IsolatedAsyncioTestCase):
         self.engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        AsyncSessionFactory = async_sessionmaker(bind=self.engine, class_=AsyncSession, expire_on_commit=False)
+        AsyncSessionFactory = async_sessionmaker(
+            bind=self.engine, class_=AsyncSession, expire_on_commit=False
+        )
         self.session = AsyncSessionFactory()
 
     async def asyncTearDown(self):
@@ -35,7 +37,9 @@ class TestCLIApp(unittest.IsolatedAsyncioTestCase):
         await app.coletar_dados_cadastro(self.session)
 
         # Verifica no banco de dados isolado se o registro foi criado corretamente
-        result = await self.session.execute(select(Navio).filter_by(imo_id="IMO1234567"))
+        result = await self.session.execute(
+            select(Navio).filter_by(imo_id="IMO1234567")
+        )
         navio_salvo = result.scalar_one_or_none()
 
         self.assertIsNotNone(navio_salvo, "O navio não foi salvo no banco de dados.")
@@ -43,6 +47,7 @@ class TestCLIApp(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(navio_salvo.status.name, "PENDENTE")
         self.assertEqual(len(navio_salvo.cargas), 1)
         self.assertEqual(navio_salvo.cargas[0].categoria, "COMUM")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,9 +53,9 @@ from datetime import datetime
 # ---------------------------------------------------------------------------
 # Ajuste do sys.path para encontrar os módulos src/ e src/gui/telas/
 # ---------------------------------------------------------------------------
-_DIR_SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))           # → src/
-_DIR_GUI = os.path.join(_DIR_SRC, "gui")                                         # → src/gui/
-_DIR_TELAS = os.path.join(_DIR_GUI, "telas")                                     # → src/gui/telas/
+_DIR_SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # → src/
+_DIR_GUI = os.path.join(_DIR_SRC, "gui")  # → src/gui/
+_DIR_TELAS = os.path.join(_DIR_GUI, "telas")  # → src/gui/telas/
 
 for _path in (_DIR_SRC, _DIR_GUI, _DIR_TELAS):
     if _path not in sys.path:
@@ -64,12 +64,13 @@ for _path in (_DIR_SRC, _DIR_GUI, _DIR_TELAS):
 import flet as ft
 
 # Importa a função de validação pura (não precisa de Page nem de banco)
-from gui.telas.painel_adm import validar_formulario_navio
-
+from gui.telas.adm.gerenciar import validar_formulario_navio
+import gui.compat
 
 # ===========================================================================
 # CLASSE AUXILIAR: MockPage
 # ===========================================================================
+
 
 class MockPage:
     """
@@ -83,6 +84,7 @@ class MockPage:
         # ... chama uma função que usa page.update(), page.snack_bar = ...
         assert page.update_chamado  # verifica se a UI foi atualizada
     """
+
     def __init__(self):
         # Simula o overlay (lista de diálogos, banners, etc.)
         self.overlay = []
@@ -106,10 +108,15 @@ class MockPage:
         """Simula navegação de rota."""
         self.route = route
 
+    def run_task(self, handler, *args, **kwargs):
+        """No-op para evitar execução de loops infinitos e background tasks não controladas nos testes."""
+        pass
+
 
 # ===========================================================================
 # FIXTURE: mock_page
 # ===========================================================================
+
 
 @pytest.fixture
 def mock_page():
@@ -123,6 +130,7 @@ def mock_page():
 # ===========================================================================
 # SUITE 1: Testes da função pura `validar_formulario_navio`
 # ===========================================================================
+
 
 class TestValidacaoFormularioNavio:
     """
@@ -236,8 +244,9 @@ class TestValidacaoFormularioNavio:
             imo="", nome="", capitao="", companhia="", peso="", categoria=""
         )
         campos_esperados = {"imo", "nome", "capitao", "companhia", "peso", "categoria"}
-        assert set(erros.keys()) == campos_esperados, \
-            f"Campos com erro: {set(erros.keys())} — Esperados: {campos_esperados}"
+        assert (
+            set(erros.keys()) == campos_esperados
+        ), f"Campos com erro: {set(erros.keys())} — Esperados: {campos_esperados}"
 
     def test_erro_num_campo_nao_contamina_outros(self):
         """Um IMO inválido não deve gerar erros nos demais campos válidos."""
@@ -251,6 +260,7 @@ class TestValidacaoFormularioNavio:
 # ===========================================================================
 # SUITE 2: Testes de estado visual com MockPage (sem display real)
 # ===========================================================================
+
 
 class TestEstadoVisualControles:
     """
@@ -270,7 +280,7 @@ class TestEstadoVisualControles:
         Este teste simula o handler que a view chama ao submeter o formulário.
         """
         # ARRANGE: Cria os controles exatamente como a view faz
-        campo_imo = ft.TextField(label="IMO ID", value="ABC")         # IMO inválido
+        campo_imo = ft.TextField(label="IMO ID", value="ABC")  # IMO inválido
         campo_nome = ft.TextField(label="Nome", value="Navio Teste")
         campo_capitao = ft.TextField(label="Capitão", value="Cap Test")
         campo_companhia = ft.TextField(label="Companhia", value="Cia Test")
@@ -307,16 +317,20 @@ class TestEstadoVisualControles:
         handle_salvar(evento_simulado)
 
         # ASSERT: Verifica o estado dos controles APÓS o handler executar
-        assert campo_imo.error_text is not None, \
-            "O campo IMO deveria exibir uma mensagem de erro (error_text)!"
-        assert "7" in campo_imo.error_text.lower() or "imo" in campo_imo.error_text.lower(), \
-            f"A mensagem de erro não é informativa o suficiente: '{campo_imo.error_text}'"
+        assert (
+            campo_imo.error_text is not None
+        ), "O campo IMO deveria exibir uma mensagem de erro (error_text)!"
+        assert (
+            "7" in campo_imo.error_text.lower() or "imo" in campo_imo.error_text.lower()
+        ), f"A mensagem de erro não é informativa o suficiente: '{campo_imo.error_text}'"
 
-        assert txt_mensagem.visible is True, \
-            "A mensagem de erro geral deveria estar visível!"
+        assert (
+            txt_mensagem.visible is True
+        ), "A mensagem de erro geral deveria estar visível!"
 
-        assert mock_page.update_chamado, \
-            "page.update() deveria ter sido chamado para atualizar a UI!"
+        assert (
+            mock_page.update_chamado
+        ), "page.update() deveria ter sido chamado para atualizar a UI!"
 
     def test_formulario_valido_nao_exibe_error_text(self, mock_page):
         """
@@ -332,9 +346,12 @@ class TestEstadoVisualControles:
 
         def handle_salvar(e):
             erros = validar_formulario_navio(
-                imo=campo_imo.value, nome=campo_nome.value,
-                capitao=campo_capitao.value, companhia=campo_companhia.value,
-                peso=campo_peso.value, categoria=dropdown_categoria.value,
+                imo=campo_imo.value,
+                nome=campo_nome.value,
+                capitao=campo_capitao.value,
+                companhia=campo_companhia.value,
+                peso=campo_peso.value,
+                categoria=dropdown_categoria.value,
             )
             campo_imo.error_text = erros.get("imo", None)
             campo_nome.error_text = erros.get("nome", None)
@@ -363,7 +380,9 @@ class TestEstadoVisualControles:
         # ARRANGE: Cria o switch e o container de aviso (replica a lógica da UI)
         aviso_perecivel = ft.Container(
             visible=False,  # Começa escondido
-            content=ft.Text("⚠️ Carga Perecível: Atenção ao prazo!", color=ft.Colors.ORANGE),
+            content=ft.Text(
+                "⚠️ Carga Perecível: Atenção ao prazo!", color=ft.Colors.ORANGE
+            ),
         )
 
         switch_perecivel = ft.Switch(label="Carga Perecível?", value=False)
@@ -382,16 +401,18 @@ class TestEstadoVisualControles:
         on_switch_changed(evento_ativo)
 
         # ASSERT 1: O aviso deve estar visível quando switch=True
-        assert aviso_perecivel.visible is True, \
-            "O aviso de perecível deveria estar visível quando o switch está ativo!"
+        assert (
+            aviso_perecivel.visible is True
+        ), "O aviso de perecível deveria estar visível quando o switch está ativo!"
 
         # ACT 2: Simula desativação do switch
         switch_perecivel.value = False
         on_switch_changed(evento_ativo)
 
         # ASSERT 2: O aviso deve desaparecer quando switch=False
-        assert aviso_perecivel.visible is False, \
-            "O aviso de perecível deveria estar oculto quando o switch está inativo!"
+        assert (
+            aviso_perecivel.visible is False
+        ), "O aviso de perecível deveria estar oculto quando o switch está inativo!"
 
     def test_botao_fica_desativado_durante_operacao_assincrona(self, mock_page):
         """
@@ -404,7 +425,9 @@ class TestEstadoVisualControles:
         # ARRANGE
         btn_atracar = ft.Button("Atracar Próximo", disabled=False)
         loading = ft.ProgressRing(visible=False)
-        operacao_executada = []  # lista mutável para capturar chamadas dentro do closure
+        operacao_executada = (
+            []
+        )  # lista mutável para capturar chamadas dentro do closure
 
         def handle_atracar(e):
             """Replica a lógica do painel_adm.py ao iniciar uma operação."""
@@ -426,12 +449,15 @@ class TestEstadoVisualControles:
         handle_atracar(evento)
 
         # ASSERT: A sequência de estados foi respeitada
-        assert operacao_executada == ["iniciada", "concluida"], \
-            "A sequência de execução do handler está incorreta!"
+        assert operacao_executada == [
+            "iniciada",
+            "concluida",
+        ], "A sequência de execução do handler está incorreta!"
 
         # Estado final: botão deve estar reativado após a operação
-        assert btn_atracar.disabled is False, \
-            "O botão deveria estar reativado após o fim da operação!"
+        assert (
+            btn_atracar.disabled is False
+        ), "O botão deveria estar reativado após o fim da operação!"
         assert loading.visible is False
 
         # O page.update() foi chamado 2 vezes (antes e depois da operação)
@@ -441,6 +467,7 @@ class TestEstadoVisualControles:
 # ===========================================================================
 # SUITE 3: Testes de comportamento da fila (lógica de negócio na View)
 # ===========================================================================
+
 
 class TestLogicaFilaView:
     """
@@ -478,8 +505,7 @@ class TestLogicaFilaView:
                 txt_vazio.visible = False
                 tabela_fila.visible = True
                 tabela_fila.rows = [
-                    ft.DataRow(cells=[ft.DataCell(ft.Text(n.nome))])
-                    for n in navios_dto
+                    ft.DataRow(cells=[ft.DataCell(ft.Text(n.nome))]) for n in navios_dto
                 ]
             mock_page.update()
 
@@ -488,7 +514,9 @@ class TestLogicaFilaView:
 
         # ASSERT
         assert txt_vazio.visible is True, "Texto 'fila vazia' deveria estar visível!"
-        assert tabela_fila.visible is False, "A tabela deveria estar oculta com fila vazia!"
+        assert (
+            tabela_fila.visible is False
+        ), "A tabela deveria estar oculta com fila vazia!"
 
     def test_fila_com_navios_popula_tabela_corretamente(self, mock_page):
         """
@@ -532,8 +560,7 @@ class TestLogicaFilaView:
                 txt_vazio.visible = False
                 tabela_fila.visible = True
                 tabela_fila.rows = [
-                    ft.DataRow(cells=[ft.DataCell(ft.Text(n.nome))])
-                    for n in navios_dto
+                    ft.DataRow(cells=[ft.DataCell(ft.Text(n.nome))]) for n in navios_dto
                 ]
             mock_page.update()
 
@@ -541,10 +568,13 @@ class TestLogicaFilaView:
         processar_resultado_fila(navios_fake)
 
         # ASSERT
-        assert txt_vazio.visible is False, "Texto 'vazio' deveria estar oculto com navios na fila!"
+        assert (
+            txt_vazio.visible is False
+        ), "Texto 'vazio' deveria estar oculto com navios na fila!"
         assert tabela_fila.visible is True, "A tabela deveria estar visível com navios!"
-        assert len(tabela_fila.rows) == 3, \
-            f"Esperado 3 linhas na tabela, mas há {len(tabela_fila.rows)}!"
+        assert (
+            len(tabela_fila.rows) == 3
+        ), f"Esperado 3 linhas na tabela, mas há {len(tabela_fila.rows)}!"
 
         # Verifica se os nomes foram inseridos na ordem correta
         nome_da_primeira_linha = tabela_fila.rows[0].cells[0].content.value
@@ -569,8 +599,9 @@ class TestLogicaFilaView:
         abrir_detalhes("Bravura dos Mares")
 
         # ASSERT: O diálogo deve estar aberto
-        assert dialogo_detalhes.open is True, \
-            "O dialogo_detalhes.open deveria ser True após clicar em 'Ver mais'!"
+        assert (
+            dialogo_detalhes.open is True
+        ), "O dialogo_detalhes.open deveria ser True após clicar em 'Ver mais'!"
         assert "Bravura dos Mares" in dialogo_detalhes.title.value
 
     def test_fechar_dialogo_altera_open_para_false(self, mock_page):
@@ -587,13 +618,15 @@ class TestLogicaFilaView:
         evento = MagicMock()
         fechar_dialogo(evento)
 
-        assert dialogo_detalhes.open is False, \
-            "O dialogo_detalhes.open deveria ser False após fechar!"
+        assert (
+            dialogo_detalhes.open is False
+        ), "O dialogo_detalhes.open deveria ser False após fechar!"
 
 
 # ===========================================================================
 # SUITE 4: Testes de cor de status (elemento visual crítico)
 # ===========================================================================
+
 
 class TestCoresDeSatusVisuais:
     """
@@ -663,14 +696,163 @@ class TestCoresDeSatusVisuais:
         este teste vai falhar imediatamente.
         """
         from cad import StatusNavio
+
         status_sem_cor_generica = []
         for status in StatusNavio:
             cor = self._cor_para_status_navio(status.value)
             if cor == ft.Colors.GREY_500:
                 status_sem_cor_generica.append(status.value)
 
-        assert status_sem_cor_generica == [], \
-            f"Os seguintes status não têm cor mapeada (estão a usar o fallback cinza): {status_sem_cor_generica}"
+        assert (
+            status_sem_cor_generica == []
+        ), f"Os seguintes status não têm cor mapeada (estão a usar o fallback cinza): {status_sem_cor_generica}"
+
+
+class TestPreCadastroEAuditoriaOutros:
+    """
+    Testes de componentes Flet para validação de 'Outros' no pré-cadastro da tripulação
+    e fluxo de leitura obrigatória na auditoria.
+    """
+
+    @pytest.mark.asyncio
+    @patch("gui.telas.adm.auditoria.obter_solicitacoes_pendentes_dto")
+    async def test_fluxo_leitura_descricao_auditoria(self, mock_obter_dto, mock_page):
+        from gui.telas.adm.auditoria import AuditoriaView
+        from dto import NavioDTO, CargaDTO
+
+        # Cria DTO com carga OUTROS_PENDENTE
+        carga_dto = CargaDTO(
+            id=1,
+            descricao="Carga Secreta Outros",
+            categoria="OUTROS_PENDENTE",
+            quantidade_toneladas=50,
+            eh_perecivel=False,
+            documento_alfandega=True,
+        )
+        navio_dto = NavioDTO(
+            imo_id="IMO9990001",
+            nome="NAVIO OUTROS TESTE",
+            nome_capitao="Capitão X",
+            companhia="Companhia X",
+            status="PENDENTE",
+            data_solicitacao=datetime.now(),
+            cargas=[carga_dto],
+            score=0.0,
+        )
+
+        mock_obter_dto.return_value = [navio_dto]
+
+        # Inicializa a AuditoriaView
+        with patch("gui.telas.adm.auditoria.obter_sessao_async") as mock_sessao_async:
+            mock_session = MagicMock()
+            mock_sessao_async.return_value.__aenter__.return_value = mock_session
+
+            view = AuditoriaView(mock_page)
+            await view.atualizar()
+
+            # 1. Verifica que as ações têm apenas o botão "Ler Descrição" (btn_ler)
+            rows = view.tabela_pendentes.rows
+            assert len(rows) == 1
+            acoes_cell = rows[0].cells[-1]
+            acoes_row = acoes_cell.content
+            assert len(acoes_row.controls) == 1
+            btn_ler = acoes_row.controls[0]
+            assert btn_ler.content.controls[1].value == "Ler Descrição"
+
+            # 2. Clica no botão "Ler Descrição" (abre o modal)
+            btn_ler.on_click(MagicMock())
+            assert view.dialogo_leitura.open is True
+            assert "Carga Secreta Outros" in view.txt_descricao_carga.value
+
+            # 3. Clica em "Confirmar Leitura"
+            view.confirmar_leitura_carga(MagicMock())
+            assert view.dialogo_leitura.open is False
+            assert "IMO9990001" in view.imos_lidos
+
+            # 4. Atualiza a view novamente
+            await view.atualizar()
+
+            # 5. Verifica que agora os botões Aprovar e Rejeitar estão visíveis!
+            rows = view.tabela_pendentes.rows
+            acoes_cell = rows[0].cells[-1]
+            acoes_row = acoes_cell.content
+            assert len(acoes_row.controls) == 2
+            assert acoes_row.controls[0].data == "aprovar"
+            assert acoes_row.controls[1].data == "rejeitar"
+
+    @pytest.mark.asyncio
+    @patch("gui.telas.painel_tripulacao.solicitar_pre_cadastro")
+    async def test_painel_tripulacao_validacao_outros(self, mock_solicitar, mock_page):
+        from gui.telas.painel_tripulacao import obter_view
+
+        view_container = obter_view(mock_page)
+
+        # Estrutura da Column principal:
+        # [0] Row(header)  [1] Text(desc)  [2] Divider
+        # [3] Row(imo, nome)  [4] Row(capitao, comp)
+        # [5] linha_categoria (Row: Container(dd), container_carga_custom)
+        # [6] linha_peso (Row: Container(txt_peso))
+        # [7] Container(switch)  [8] Divider  [9] Row(btn)
+        column = view_container.content.content
+
+        row_imo_nome = column.controls[3]
+        row_cap_comp = column.controls[4]
+        linha_categoria = column.controls[5]
+        linha_peso = column.controls[6]
+
+        txt_imo = row_imo_nome.controls[0]
+        txt_nome_navio = row_imo_nome.controls[1]
+        txt_capitao = row_cap_comp.controls[0]
+        txt_companhia = row_cap_comp.controls[1]
+        dd_produto_carga = linha_categoria.controls[0].content  # Container.content
+        container_carga_custom = linha_categoria.controls[1]
+        txt_carga_customizada = container_carga_custom.content
+        txt_peso = linha_peso.controls[0].content  # Container.content
+
+        btn_enviar = column.controls[9].controls[0].content
+
+        # Preenche com dados válidos comuns, mas escolhe OUTROS_PENDENTE sem preencher a descrição
+        txt_imo.value = "1234567"
+        txt_nome_navio.value = "NAVIO TESTE"
+        txt_capitao.value = "Capitão Teste"
+        txt_companhia.value = "Cia Teste"
+        txt_peso.value = "500"
+        dd_produto_carga.value = "OUTROS_PENDENTE"
+
+        # Simula a mudança do dropdown
+        assert container_carga_custom.visible is False
+        dd_produto_carga.on_change(MagicMock())
+        assert container_carga_custom.visible is True
+
+        # Aciona o envio sem valor (deve falhar na validação)
+        with patch(
+            "gui.telas.painel_tripulacao.obter_sessao_async"
+        ) as mock_sessao_async:
+            mock_session = MagicMock()
+            mock_sessao_async.return_value.__aenter__.return_value = mock_session
+
+            txt_carga_customizada.value = ""
+            await btn_enviar.on_click(MagicMock())
+            assert (
+                txt_carga_customizada.error_text
+                == "A descrição da carga é obrigatória para a categoria Outros."
+            )
+            assert mock_solicitar.called is False
+
+            # Força erro de validação de > 500 no txt_carga_customizada
+            txt_carga_customizada.value = "A" * 501
+            await btn_enviar.on_click(MagicMock())
+            assert (
+                txt_carga_customizada.error_text
+                == "A descrição deve ter no máximo 500 caracteres."
+            )
+            assert mock_solicitar.called is False
+
+            # Preenche com descrição válida (limite <= 500)
+            txt_carga_customizada.value = "Carga de Madeira e Papel"
+            await btn_enviar.on_click(MagicMock())
+            assert txt_carga_customizada.error_text is None
+            assert mock_solicitar.called is True
 
 
 if __name__ == "__main__":

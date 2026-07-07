@@ -14,12 +14,17 @@ from dto import NavioDTO
 
 class CargaNaoClassificadaError(Exception):
     """Exceção levantada quando uma carga precisa ser classificada interativamente pela apresentação."""
-    def __init__(self, imo_id: str, navio_nome: str, carga_id: int, carga_descricao: str):
+
+    def __init__(
+        self, imo_id: str, navio_nome: str, carga_id: int, carga_descricao: str
+    ):
         self.imo_id = imo_id
         self.navio_nome = navio_nome
         self.carga_id = carga_id
         self.carga_descricao = carga_descricao
-        super().__init__(f"A carga '{carga_descricao}' (ID: {carga_id}) do navio {navio_nome} ({imo_id}) precisa de classificação.")
+        super().__init__(
+            f"A carga '{carga_descricao}' (ID: {carga_id}) do navio {navio_nome} ({imo_id}) precisa de classificação."
+        )
 
 
 async def solicitar_pre_cadastro(
@@ -103,14 +108,20 @@ async def auditar_solicitacoes_pendentes(session) -> list[NavioDTO]:
 
     auditos = []
     for navio in navios_pendentes:
-        for carga in navio.cargas:
-            if carga.categoria == "OUTROS_PENDENTE":
-                raise CargaNaoClassificadaError(
-                    imo_id=navio.imo_id,
-                    navio_nome=navio.nome,
-                    carga_id=carga.id,
-                    carga_descricao=carga.descricao
-                )
+        # Se a documentação estiver pendente em algum item da carga, o navio será rejeitado de qualquer forma.
+        # Nesse caso, não levantamos CargaNaoClassificadaError, permitindo a auditoria em lote direta.
+        possui_docs_pendentes = any(
+            not carga.documento_alfandega for carga in navio.cargas
+        )
+        if not possui_docs_pendentes:
+            for carga in navio.cargas:
+                if carga.categoria == "OUTROS_PENDENTE":
+                    raise CargaNaoClassificadaError(
+                        imo_id=navio.imo_id,
+                        navio_nome=navio.nome,
+                        carga_id=carga.id,
+                        carga_descricao=carga.descricao,
+                    )
 
         _auditar_documentacao_navio(navio)
         auditos.append(navio.to_dto())
@@ -129,13 +140,17 @@ async def excluir_registro_navio(session, imo_id: str):
         raise ValueError(f"Nenhum navio encontrado com o IMO ID '{imo_id}'.")
 
     if navio.status == StatusNavio.ATRACADO:
-        raise ValueError(f"Não é possível excluir o navio '{navio.nome}' pois ele está atualmente ATRACADO.")
+        raise ValueError(
+            f"Não é possível excluir o navio '{navio.nome}' pois ele está atualmente ATRACADO."
+        )
 
     await session.delete(navio)
     await session.commit()
 
 
-async def editar_registro_navio(session, imo_id: str, nome: str, capitao: str, companhia: str) -> NavioDTO:
+async def editar_registro_navio(
+    session, imo_id: str, nome: str, capitao: str, companhia: str
+) -> NavioDTO:
     """
     Edita os dados cadastrais básicos de um navio.
     """
@@ -168,10 +183,7 @@ async def obter_todos_navios_dto(session) -> list[NavioDTO]:
     """
     Retorna todos os navios cadastrados como DTOs.
     """
-    stmt = (
-        select(Navio)
-        .options(joinedload(Navio.cargas))
-    )
+    stmt = select(Navio).options(joinedload(Navio.cargas))
     result = await session.execute(stmt)
     navios = result.scalars().unique().all()
     return [navio.to_dto() for navio in navios]
@@ -182,9 +194,7 @@ async def auditar_navio_individual(session, imo_id: str, acao: str) -> NavioDTO:
     Aprova ou rejeita uma solicitação individual de navio.
     """
     stmt = (
-        select(Navio)
-        .options(joinedload(Navio.cargas))
-        .filter(Navio.imo_id == imo_id)
+        select(Navio).options(joinedload(Navio.cargas)).filter(Navio.imo_id == imo_id)
     )
     result = await session.execute(stmt)
     navio = result.scalars().first()
@@ -202,6 +212,3 @@ async def auditar_navio_individual(session, imo_id: str, acao: str) -> NavioDTO:
 
     await session.commit()
     return navio.to_dto()
-
-
-

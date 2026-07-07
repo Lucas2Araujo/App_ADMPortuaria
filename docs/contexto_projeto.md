@@ -3,7 +3,7 @@
 ## 1. Visão Geral e Arquitetura
 * **Objetivo:** Sistema de gestão e administração portuária, desenvolvido como projeto avaliativo para a disciplina de Projeto e Desenvolvimento de Software (UFMA).
 * **Stack Tecnológico:** 
-  * Backend: Python com SQLAlchemy (migrando para `sqlalchemy.ext.asyncio`).
+  * Backend: Python com SQLAlchemy 2.0 (migrando para `sqlalchemy.ext.asyncio`).
   * Frontend: Flet (GUI em Python).
   * Documentação: MkDocs com integração PlantUML.
 * **Problema Atual a ser Resolvido:** O sistema sofre de lentidão e travamentos na GUI ao renderizar muitos dados (especialmente na tela de visualização da fila e informações da embarcação). Precisamos refatorar as chamadas síncronas para **assíncronas** e eliminar o problema de **N+1 Queries** no SQLAlchemy.
@@ -91,3 +91,16 @@ MotorDeFila ..> Navio : prioriza >
 ControladorOperacao ..> Atracacao : registra >
 
 @enduml
+
+## 5. Mapeamento de Gargalos (Pente Fino)
+A IA deve focar a refatoração nestes pontos críticos identificados no repositório:
+
+- **Concorrência na GUI:**
+  - O arquivo `gui/telas/fila_view.py`[cite: 11] e `gui/telas/painel_adm.py`[cite: 11] utilizam `Thread(target=worker)` para não travar a UI. A refatoração para `asyncio` deve substituir essas threads, utilizando `page.run_task` ou suporte nativo a `async` do Flet[cite: 8].
+  
+- **N+1 Queries Confirmadas:**
+  - No arquivo `controller_operacao.py`[cite: 5], a função `obter_painel_vagas_dto` faz consultas separadas para `Vaga`, `Atracacao` e `Navio`. Isso deve ser consolidado em um `joinedload` único na consulta de `Atracacao` que traga o `Navio` e suas `Cargas`[cite: 5].
+  - Em `controller_cadastros.py`, as funções como `auditar_solicitacoes_pendentes` já utilizam `joinedload(Navio.cargas)`, o que serve de exemplo, mas precisa ser migrado para a versão `Async` do SQLAlchemy[cite: 4].
+
+- **Consistência de DTOs:**
+  - O arquivo `dto.py` define a estrutura que o front-end consome. Qualquer mudança na query (Eager Loading) deve garantir que o `NavioDTO` receba os dados corretamente preenchidos sem causar erros de `AttributeError` no Flet[cite: 10].
