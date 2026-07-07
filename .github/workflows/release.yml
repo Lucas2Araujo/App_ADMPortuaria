@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-name: Compilar Executáveis e Criar Nova Release (CD)
-=======
 name: Release
->>>>>>> 8843451fccfc2e17a09ce068f06eb8bb19bff4dd
 
 on:
   workflow_dispatch:
@@ -49,22 +45,14 @@ jobs:
       - name: 🔨 Compilar CLI (app.py) com PyInstaller
         shell: bash
         run: |
-<<<<<<< HEAD
-          pyinstaller --onefile --name ${{ matrix.artifact_name }} src/app.py
-=======
           pyinstaller --onefile --hidden-import=aiosqlite --name ${{ matrix.artifact_name }} src/app.py
->>>>>>> 8843451fccfc2e17a09ce068f06eb8bb19bff4dd
           mkdir -p bin_outputs
           mv dist/${{ matrix.artifact_name }}* bin_outputs/
 
       - name: 🎨 Compilar GUI (app_gui.py) com Flet Pack
         shell: bash
         run: |
-<<<<<<< HEAD
-          flet pack -y src/app_gui.py --name ${{ matrix.gui_artifact_name }}
-=======
           flet pack -y src/app_gui.py --name ${{ matrix.gui_artifact_name }} --hidden-import aiosqlite
->>>>>>> 8843451fccfc2e17a09ce068f06eb8bb19bff4dd
           mkdir -p bin_outputs
           mv dist/${{ matrix.gui_artifact_name }}* bin_outputs/
 

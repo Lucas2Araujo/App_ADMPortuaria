@@ -6,7 +6,6 @@ from cad import obter_sessao_async
 from ord_propriety import obter_fila_atracacao_dto
 
 
-
 def obter_view(page: ft.Page):
 
     tabela_fila = ft.DataTable(

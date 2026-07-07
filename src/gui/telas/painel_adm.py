@@ -77,6 +77,7 @@ class PainelAdmView:
         self.txt_fila = ft.Text("0", size=30, weight=ft.FontWeight.BOLD)
         self.txt_pendentes = ft.Text("0", size=30, weight=ft.FontWeight.BOLD)
         self.txt_concluidos = ft.Text("0", size=30, weight=ft.FontWeight.BOLD)
+        self.txt_taxa = ft.Text("0.0", size=30, weight=ft.FontWeight.BOLD)
 
         self.loading_indicator = ft.ProgressRing(visible=False)
 
@@ -332,54 +333,17 @@ class PainelAdmView:
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
-                    ft.ResponsiveRow(
+                    # APLICADO EXPAND=1 DENTRO DO CREATE_STAT_CARD - Sempre lado a lado com espaços respeitados
+                    ft.Row(
                         [
-                            ft.Column(
-                                col={"sm": 12, "md": 6, "lg": 3},
-                                controls=[
-                                    self.create_stat_card(
-                                        "Vagas Livres / Total",
-                                        self.txt_vagas,
-                                        ft.Icons.ANCHOR,
-                                        ft.Colors.BLUE,
-                                    )
-                                ]
-                            ),
-                            ft.Column(
-                                col={"sm": 12, "md": 6, "lg": 3},
-                                controls=[
-                                    self.create_stat_card(
-                                        "Navios na Fila",
-                                        self.txt_fila,
-                                        ft.Icons.FORMAT_LIST_NUMBERED,
-                                        ft.Colors.ORANGE,
-                                    )
-                                ]
-                            ),
-                            ft.Column(
-                                col={"sm": 12, "md": 6, "lg": 3},
-                                controls=[
-                                    self.create_stat_card(
-                                        "Auditorias Pendentes",
-                                        self.txt_pendentes,
-                                        ft.Icons.HOURGLASS_BOTTOM,
-                                        ft.Colors.RED,
-                                    )
-                                ]
-                            ),
-                            ft.Column(
-                                col={"sm": 12, "md": 6, "lg": 3},
-                                controls=[
-                                    self.create_stat_card(
-                                        "Operações Concluídas",
-                                        self.txt_concluidos,
-                                        ft.Icons.CHECK_CIRCLE,
-                                        ft.Colors.GREEN,
-                                    )
-                                ]
-                            ),
+                            self.create_stat_card("Vagas Livres / Total", self.txt_vagas, ft.Icons.ANCHOR, ft.Colors.BLUE),
+                            self.create_stat_card("Navios na Fila", self.txt_fila, ft.Icons.FORMAT_LIST_NUMBERED, ft.Colors.ORANGE),
+                            self.create_stat_card("Auditorias Pendentes", self.txt_pendentes, ft.Icons.HOURGLASS_BOTTOM, ft.Colors.RED),
+                            self.create_stat_card("Operações Concluídas", self.txt_concluidos, ft.Icons.CHECK_CIRCLE, ft.Colors.GREEN),
+                            self.create_stat_card("Taxa de Atracação/Dia", self.txt_taxa, ft.Icons.SPEED, ft.Colors.PURPLE),
                         ],
-                        run_spacing=15,
+                        spacing=15,
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
                     ft.Divider(height=25, color=ft.Colors.TRANSPARENT),
                     ft.Text(
@@ -610,12 +574,12 @@ class PainelAdmView:
                     btn_aprovar = ft.IconButton(
                         icon=ft.Icons.CHECK_CIRCLE,
                         icon_color=ft.Colors.GREEN,
-                        on_click=lambda e, imo=navio.imo_id: self.abrir_confirmacao(imo, "APROVAR"),
+                        on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao(imo, nome, "APROVAR"),
                     )
                     btn_rejeitar = ft.IconButton(
                         icon=ft.Icons.CANCEL,
                         icon_color=ft.Colors.RED,
-                        on_click=lambda e, imo=navio.imo_id: self.abrir_confirmacao(imo, "REJEITAR"),
+                        on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao(imo, nome, "REJEITAR"),
                     )
                     novas_linhas.append(
                         ft.DataRow(
@@ -703,10 +667,10 @@ class PainelAdmView:
         self.dialogo_confirmacao.open = False
         self.page.update()
 
-    def abrir_confirmacao(self, imo, acao):
+    def abrir_confirmacao(self, imo, nome, acao):
         self.imo_em_auditoria = imo
         self.acao_em_auditoria = acao
-        self.txt_mensagem_modal.value = f"Deseja {acao.lower()} a solicitação do navio {imo}?"
+        self.txt_mensagem_modal.value = f"Deseja {acao.lower()} a solicitação do navio {nome} ({imo})?"
         self.dialogo_confirmacao.open = True
         self.page.update()
 
@@ -838,15 +802,16 @@ class PainelAdmView:
         self.dialogo_confirmar_exclusao.open = False
         self.page.update()
 
-    def abrir_confirmacao_exclusao(self, imo):
+    def abrir_confirmacao_exclusao(self, imo, nome):
         self.imo_para_excluir = imo
-        self.txt_msg_exclusao.value = f"Tem certeza que deseja excluir permanentemente o navio {imo}?"
+        self.txt_msg_exclusao.value = f"Tem certeza que deseja excluir permanentemente o navio {nome} ({imo})?"
         self.dialogo_confirmar_exclusao.open = True
         self.page.update()
 
     def criar_caixa(self, titulo, icone, controles_lista):
         return ft.Container(
             expand=1,
+            height=340,          # diminuit a autura do cards inferiores, achei muito grand
             padding=15,
             border_radius=10,
             border=ft.Border.all(1, ft.Colors.BLUE_GREY_500),
@@ -996,6 +961,10 @@ class PainelAdmView:
         hoje_date = datetime.now().date()
         contagem_por_dia = await obter_contagem_atracacoes_dia(session, 7)
 
+        total_semana = sum(contagem_por_dia.values())
+        taxa_diaria = total_semana / 7.0
+        self.txt_taxa.value = f"{taxa_diaria:.1f}"
+
         pico = max(contagem_por_dia.values(), default=1) or 1
         altura_max = 120
         novo_grafico = []
@@ -1141,7 +1110,7 @@ class PainelAdmView:
             btn_excluir = ft.IconButton(
                 icon=ft.Icons.DELETE,
                 icon_color=ft.Colors.RED,
-                on_click=lambda e, imo=navio.imo_id: self.abrir_confirmacao_exclusao(imo),
+                on_click=lambda e, imo=navio.imo_id, nome=navio.nome: self.abrir_confirmacao_exclusao(imo, nome),
             )
             novas_linhas_navios.append(
                 ft.DataRow(
@@ -1196,9 +1165,9 @@ class PainelAdmView:
     def create_stat_card(self, title, text_control, icon, icon_color):
         return ft.Card(
             elevation=4,
+            expand=1,        # força o Card a preencher proporcionalmente o espaço horizontal
             content=ft.Container(
                 padding=15,
-                width=220,
                 border_radius=10,
                 content=ft.Column(
                     [

@@ -6,14 +6,11 @@ diretorio_src = os.path.dirname(os.path.abspath(__file__))
 if diretorio_src not in sys.path:
     sys.path.append(diretorio_src)
 
-
 from gui.telas.painel_adm import obter_view as view_dashboard
 from gui.telas.fila_view import obter_view as view_fila
 from gui.telas.painel_tripulacao import obter_view as view_tripulacao
 
-
 def main(page: ft.Page):
-
     from cad import inicializar_banco, obter_sessao
     from pop_bd import gerar_vagas_iniciais
     db_path = os.path.join(diretorio_src, "porto.db")
@@ -26,209 +23,182 @@ def main(page: ft.Page):
     page.padding = 0
     page.theme = ft.Theme(color_scheme_seed=ft.Colors.BLUE_GREY)
 
-    def alternar_tema(e):
-        if page.theme_mode == ft.ThemeMode.LIGHT:
-            page.theme_mode = ft.ThemeMode.DARK
-            btn_tema.icon = ft.Icons.WB_SUNNY
-            menu_lateral.bgcolor = ft.Colors.BLUE_GREY_900
-        else:
-            page.theme_mode = ft.ThemeMode.LIGHT
-            btn_tema.icon = ft.Icons.NIGHTS_STAY
-            menu_lateral.bgcolor = ft.Colors.BLUE_GREY_50
-        page.update()
-
-
-    btn_tema = ft.IconButton(
-        icon=ft.Icons.NIGHTS_STAY, icon_color=ft.Colors.WHITE, on_click=alternar_tema
-    )
-
-    def gerar_dados_bd(e):
-        try:
-            import pop_bd
-            from cad import obter_sessao
-
-            with obter_sessao() as session:
-                pop_bd.gerar_navios_fake(session, 60)
-
-            page.snack_bar = ft.SnackBar(
-                ft.Text(
-                    "60 navios injetados secretamente com sucesso! Atualize a tabela."
-                ),
-                bgcolor=ft.Colors.GREEN_700,
-            )
-            page.snack_bar.open = True
-            page.update()
-        except Exception as erro:
-            print(f"Erro ao injetar navios: {erro}")
-
-
-    page.appbar = ft.AppBar(
-        leading=ft.Icon(
-            ft.Icons.DIRECTIONS_BOAT_FILLED, color=ft.Colors.BLUE_200, size=28
-        ),
-        leading_width=60,
-        title=ft.Text(
-            "Terminal Portuário S/A",
-            size=22,
-            weight=ft.FontWeight.BOLD,
-            color=ft.Colors.WHITE,
-        ),
-        center_title=False,
-        bgcolor=ft.Colors.BLUE_GREY_900,
-        actions=[
-            btn_tema,
-            ft.IconButton(
-                ft.Icons.ACCOUNT_CIRCLE,
-                icon_color=ft.Colors.WHITE,
-                tooltip="Gerar Dados",
-                on_click=gerar_dados_bd,
-            ),
-        ],
-    )
-
-
-    def navegar_para(target: str):
-        page.active_tab = target
-
-        page.overlay.clear()
-
-        novo_conteudo = None
-
-        if target == "dashboard":
-            # Wrapper para animação da esquerda para direita
-            conteudo = view_dashboard(page, "dashboard")
-            novo_conteudo = ft.Container(
-                content=conteudo,
-                opacity=0,
-                offset=ft.Offset(-0.05, 0),
-                animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
-                animate_offset=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
-                expand=True,
-                key="dashboard_view" # Use key to force AnimatedSwitcher to see it as a new widget
-            )
-            menu_lateral.selected_index = 0
-        elif target == "vagas":
-            novo_conteudo = view_dashboard(page, "vagas")
-            menu_lateral.selected_index = 1
-        elif target == "gerenciar":
-            novo_conteudo = view_dashboard(page, "gerenciar")
-            menu_lateral.selected_index = 2
-        elif target == "auditoria":
-            novo_conteudo = view_dashboard(page, "auditoria")
-            menu_lateral.selected_index = 3
-        elif target == "fila":
-            novo_conteudo = view_fila(page)
-            menu_lateral.selected_index = 4
-        elif target == "tripulacao":
-            novo_conteudo = view_tripulacao(page)
-            menu_lateral.selected_index = 5
-            
-        # Ensure that other views have a key as well so AnimatedSwitcher works properly
-        if target != "dashboard" and isinstance(novo_conteudo, ft.Control):
-            # Wrap in a simple container to give it a key
-            novo_conteudo = ft.Container(content=novo_conteudo, key=target, expand=True)
-
-        conteudo_principal.content = novo_conteudo
-        page.update()
-
-        # Dispara a animação do dashboard após ele ter sido renderizado com opacidade 0
-        if target == "dashboard":
-            novo_conteudo.opacity = 1
-            novo_conteudo.offset = ft.Offset(0, 0)
-            page.update()
-
-
-    page.active_tab = "dashboard"
-    
-    # Inicia com o dashboard animado
-    dash_inicial = ft.Container(
-        content=view_dashboard(page, "dashboard"),
-        opacity=0,
-        offset=ft.Offset(-0.05, 0),
-        animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
-        animate_offset=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
-        expand=True,
-        key="dashboard_view_inicial"
-    )
-    
-    conteudo_principal = ft.AnimatedSwitcher(
-        content=dash_inicial,
-        transition=ft.AnimatedSwitcherTransition.FADE,
-        duration=400,
-        reverse_duration=400,
-        switch_in_curve=ft.AnimationCurve.EASE_IN,
-        switch_out_curve=ft.AnimationCurve.EASE_OUT,
-        expand=True
-    )
-    
-    # Agenda a animação inicial assim que a UI for montada
-    async def disparar_animacao_inicial(e=None):
-        dash_inicial.opacity = 1
-        dash_inicial.offset = ft.Offset(0, 0)
-        page.update()
+    def mostrar_login():
+        page.controls.clear()
+        page.appbar = None
         
-    page.run_task(disparar_animacao_inicial)
+        senha_field = ft.TextField(
+            label="Código de Acesso ADM",
+            password=True,
+            can_reveal_password=True,
+            width=300,
+            prefix_icon=ft.Icons.LOCK,
+            on_submit=lambda e: verificar_senha()
+        )
+        
+        def verificar_senha(e=None):
+            if senha_field.value == "admin123":
+                dialogo_senha.open = False
+                iniciar_app(role="admin")
+            else:
+                senha_field.error_text = "Senha incorreta!"
+                page.update()
 
+        dialogo_senha = ft.AlertDialog(
+            title=ft.Text("Acesso Administrativo"),
+            content=senha_field,
+            actions=[
+                ft.TextButton("Cancelar", on_click=lambda e: fechar_dialogo()),
+                ft.ElevatedButton("Entrar", on_click=verificar_senha, bgcolor=ft.Colors.BLUE_900, color=ft.Colors.WHITE)
+            ],
+        )
+        
+        def fechar_dialogo():
+            dialogo_senha.open = False
+            senha_field.value = ""
+            senha_field.error_text = None
 
-    def mudar_tela(e):
-        index = e.control.selected_index
-        mapa_rotas = {
-            0: "dashboard",
-            1: "vagas",
-            2: "gerenciar",
-            3: "auditoria",
-            4: "fila",
-            5: "tripulacao",
-        }
-        if index in mapa_rotas:
-            navegar_para(mapa_rotas[index])
+        def abrir_dialogo_admin(e):
+            page.overlay.append(dialogo_senha)
+            dialogo_senha.open = True
+            page.update()
 
+        login_view = ft.Container(
+            expand=True,
+            alignment=ft.Alignment(0, 0),
+            bgcolor=ft.Colors.BLUE_GREY_50,
+            content=ft.Card(
+                elevation=8,
+                shape=ft.RoundedRectangleBorder(radius=15),
+                content=ft.Container(
+                    padding=40,
+                    width=420,
+                    content=ft.Column(
+                        [
+                            ft.Icon(ft.Icons.DIRECTIONS_BOAT_FILLED, size=80, color=ft.Colors.BLUE_900),
+                            ft.Text("Terminal Portuário S/A", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_GREY_900),
+                            ft.Text("Selecione seu perfil de acesso", size=14, color=ft.Colors.GREY_600),
+                            ft.Divider(height=30, color=ft.Colors.TRANSPARENT),
+                            ft.ElevatedButton(
+                                "Representante / Tripulação",
+                                icon=ft.Icons.ANCHOR,
+                                width=320,
+                                style=ft.ButtonStyle(padding=20, bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE),
+                                on_click=lambda e: iniciar_app(role="tripulacao")
+                            ),
+                            ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                            ft.OutlinedButton(
+                                "Administração do Porto",
+                                icon=ft.Icons.ADMIN_PANEL_SETTINGS,
+                                width=320,
+                                style=ft.ButtonStyle(padding=20),
+                                on_click=abrir_dialogo_admin
+                            )
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        tight=True
+                    )
+                )
+            )
+        )
+        page.add(login_view)
+        page.update()
 
-    menu_lateral = ft.NavigationRail(
-        selected_index=0,
-        label_type=ft.NavigationRailLabelType.ALL,
-        extended=True,
-        min_width=72,
-        min_extended_width=204,
-        bgcolor=ft.Colors.BLUE_GREY_50,
-        group_alignment=-0.9,
-        destinations=[
-            ft.NavigationRailDestination(
-                icon=ft.Icons.PIE_CHART_OUTLINE,
-                selected_icon=ft.Icons.PIE_CHART,
-                label="Visão Geral",
-            ),
-            ft.NavigationRailDestination(
-                icon=ft.Icons.VIEW_AGENDA_OUTLINED,
-                selected_icon=ft.Icons.VIEW_AGENDA,
-                label="Monitor de Berços",
-            ),
-            ft.NavigationRailDestination(
-                icon=ft.Icons.DIRECTIONS_BOAT_OUTLINED,
-                selected_icon=ft.Icons.DIRECTIONS_BOAT_FILLED,
-                label="Gestão de Navios",
-            ),
-            ft.NavigationRailDestination(
-                icon=ft.Icons.FACT_CHECK_OUTLINED,
-                selected_icon=ft.Icons.FACT_CHECK,
-                label="Auditar Solicitações",
-            ),
-            ft.NavigationRailDestination(
-                icon=ft.Icons.FORMAT_LIST_NUMBERED,
-                selected_icon=ft.Icons.FORMAT_LIST_NUMBERED,
-                label="Fila de Atracação",
-            ),
-            ft.NavigationRailDestination(
-                icon=ft.Icons.ANCHOR,
-                selected_icon=ft.Icons.ANCHOR,
-                label="Portal da Tripulação",
-            ),
-        ],
-        on_change=mudar_tela,
-    )
+    def iniciar_app(role):
+        page.controls.clear()
 
+        def alternar_tema(e):
+            page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
+            page.update()
 
-    page.add(ft.Row(controls=[menu_lateral, conteudo_principal], expand=True))
+        def gerar_dados_bd(e):
+            try:
+                import pop_bd
+                from cad import obter_sessao
 
+                with obter_sessao() as session:
+                    pop_bd.gerar_navios_fake(session, 60)
 
+                page.snack_bar = ft.SnackBar(
+                    ft.Text(
+                        "60 navios injetados com sucesso! Atualize a tabela."
+                    ),
+                    bgcolor=ft.Colors.GREEN_700,
+                )
+                page.snack_bar.open = True
+            except Exception as err:
+                print(f"Erro ao gerar dados: {err}")
+            page.update()
 
+        btn_sair = ft.IconButton(icon=ft.Icons.LOGOUT, icon_color=ft.Colors.RED_300, on_click=lambda e: mostrar_login())
+
+        page.appbar = ft.AppBar(
+            title=ft.Text(f"Terminal Portuário S/A - {'[Admin]' if role == 'admin' else 'Tripulação'}"),
+            bgcolor=ft.Colors.BLUE_GREY_900,
+            color=ft.Colors.WHITE,
+            actions=[
+                ft.IconButton(
+                    ft.Icons.ACCOUNT_CIRCLE,
+                    icon_color=ft.Colors.WHITE,
+                    tooltip="Gerar Dados",
+                    on_click=gerar_dados_bd,
+                ),
+                ft.IconButton(ft.Icons.NIGHTS_STAY, on_click=alternar_tema),
+                btn_sair
+            ],
+        )
+
+        # Filtro de permissões
+        if role == "admin":
+            destinos_menu = [
+                ft.NavigationRailDestination(icon=ft.Icons.PIE_CHART, label="Visão Geral"),
+                ft.NavigationRailDestination(icon=ft.Icons.VIEW_AGENDA, label="Monitor de Berços"),
+                ft.NavigationRailDestination(icon=ft.Icons.DIRECTIONS_BOAT, label="Gestão de Navios"),
+                ft.NavigationRailDestination(icon=ft.Icons.FACT_CHECK, label="Auditar Solicitações"),
+                ft.NavigationRailDestination(icon=ft.Icons.FORMAT_LIST_NUMBERED, label="Fila de Atracação"),
+                ft.NavigationRailDestination(icon=ft.Icons.ANCHOR, label="Portal da Tripulação"),
+            ]
+            mapa_rotas = {0: "dashboard", 1: "vagas", 2: "gerenciar", 3: "auditoria", 4: "fila", 5: "tripulacao"}
+        else:
+            destinos_menu = [
+                ft.NavigationRailDestination(icon=ft.Icons.PIE_CHART, label="Visão Geral"),
+                ft.NavigationRailDestination(icon=ft.Icons.FORMAT_LIST_NUMBERED, label="Fila de Atracação"),
+                ft.NavigationRailDestination(icon=ft.Icons.ANCHOR, label="Portal da Tripulação"),
+            ]
+            mapa_rotas = {0: "dashboard", 1: "fila", 2: "tripulacao"}
+
+        cache_telas = {}
+
+        def navegar_para(target: str):
+            page.active_tab = target
+            
+            if target not in cache_telas:
+                # Carregamento sob demanda (Lazy Loading)
+                if target == "dashboard": cache_telas[target] = view_dashboard(page, "dashboard")
+                elif target == "vagas": cache_telas[target] = view_dashboard(page, "vagas")
+                elif target == "gerenciar": cache_telas[target] = view_dashboard(page, "gerenciar")
+                elif target == "auditoria": cache_telas[target] = view_dashboard(page, "auditoria")
+                elif target == "fila": cache_telas[target] = view_fila(page)
+                elif target == "tripulacao": cache_telas[target] = view_tripulacao(page)
+
+            conteudo_principal.content = cache_telas[target]
+            
+            for k, v in mapa_rotas.items():
+                if v == target:
+                    menu_lateral.selected_index = k
+                    break
+            page.update()
+
+        menu_lateral = ft.NavigationRail(
+            selected_index=0,
+            extended=True,
+            destinations=destinos_menu,
+            on_change=lambda e: navegar_para(mapa_rotas[e.control.selected_index]),
+        )
+
+        conteudo_principal = ft.Container(expand=True)
+        page.add(ft.Row([menu_lateral, conteudo_principal], expand=True))
+        navegar_para("dashboard")
+
+    mostrar_login()
